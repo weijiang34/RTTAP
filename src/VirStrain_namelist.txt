@@ -1,0 +1,29 @@
+DB_name	Full_name	name_contains	species_name
+Adv	Human adenovirus	Human mastadenovirus	
+HPIV	Human respirovirus	Human respirovirus	
+ENV	Human poliovirus	Enterovirus C
+HPeV	Human parechovirus	Parechovirus A
+HGV	Human gammaherpesvirus	Human gammaherpesvirus	
+ROV	Human betaherpesvirus	Roseolovirus humanbeta	
+
+HCMV	Human betaherpesvirus		Cytomegalovirus humanbeta5
+Rsv	Human orthopneumovirus	orthopneumovirus	Orthopneumovirus hominis
+MVi	Measles virus		Morbillivirus hominis
+H1N1_H3N2	Influenza A virus		Influenza A virus
+H5N1	Influenza A virus		Influenza A virus
+H7N9	Influenza A virus		Influenza A virus
+SCOV2	Severe acute respiratory syndrome coronavirus 2		Severe acute respiratory syndrome-related coronavirus
+Human_rhinovirus_A	Human rhinovirus A		Human rhinovirus A
+MERS	Middle East respiratory syndrome-related coronavirus		Middle East respiratory syndrome-related coronavirus
+Human_rhinovirus_B	Human rhinovirus B		Human rhinovirus B
+Human_rhinovirus_C	Human rhinovirus C		Human rhinovirus C
+COVID_NL63	Human coronavirus NL63		Human coronavirus NL63
+COVID_OC43	Human coronavirus OC43		Betacoronavirus 1
+COVID_HKU1	Human coronavirus HKU1		Human coronavirus HKU1
+SARS	Severe acute respiratory syndrome coronavirus		Severe acute respiratory syndrome-related coronavirus
+Influenza_C	Influenza C virus		Influenza C virus
+hMPV	Human metapneumovirus		Metapneumovirus hominis
+Ubv6	Ungulate bocaparvovirus 6		Bocaparvovirus ungulate6
+HPIV4	Human parainfluenza virus 4		Orthorubulavirus hominis
+KIV	KI polyomavirus		Betapolyomavirus tertihominis
+WUV	WU Polyomavirus		Betapolyomavirus quartihominis
