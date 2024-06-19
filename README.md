@@ -1,2 +1,3 @@
 # RTTAP
-A Read-based Total-infectome Taxonomic Analysis Pipeline
+The Read-based Total-infectome Taxonomic Analysis Pipeline.  
+RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accurate, and sensitive pipeline focusing analyses of the totoal-infectome of clinical metatranscriptomic data. It includes multiple useful functions to process and analyze raw sequencing reads: quality control, taxonomy profiling, ARG profiling, and virus strain-level profiling thus providing users comprehensive insights about the microbial composition in clinical samples. It is user friendly and easy-to-use, involving minimum human intervention: all its steps could be finished in a single run. 

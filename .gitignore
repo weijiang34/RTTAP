@@ -1,2 +1,2 @@
-./src/viruses.acc2taxid.txt
-./src/EuPathDB46.seq2taxid.txt
+src/dependencies/*
+*__pycache__*
