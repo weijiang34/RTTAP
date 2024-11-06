@@ -408,26 +408,26 @@ def run_VirStrain(viral_fq_gz, viral_report, virstrain_list, out_dir, tool_path,
                 f.writelines(["\n"])
 
 def bacterial_stage(out_dir, fileHeader, split_script, mpa_path, rgi_path, CARD_db, metaphlan4_db_path, kraken2_report, RPM_threshold=10, threads=8):
-    # split_reads(
-    #     kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
-    #     kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
-    #     fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
-    #     out_dir=os.path.join(out_dir,"splited_reads"), 
-    #     fileHeader=fileHeader, reads_type="bacteria", 
-    #     script_path=split_script
-    # )
+    split_reads(
+        kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
+        kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
+        fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+        out_dir=os.path.join(out_dir,"splited_reads"), 
+        fileHeader=fileHeader, reads_type="bacteria", 
+        script_path=split_script
+    )
 
-    # p1 = multiprocessing.Process(
-    #     target=run_Metaphlan4, 
-    #     kwargs={
-    #         "input": os.path.join(out_dir, "splited_reads", f"{fileHeader}.bacteria.fq.gz"),
-    #         "out_dir": os.path.join(out_dir, "Bacteria_results"),
-    #         "tool_path": mpa_path,
-    #         "fileHeader": fileHeader,
-    #         "metaphlan4_db_path": metaphlan4_db_path,
-    #         "threads": threads
-    #     }
-    # )
+    p1 = multiprocessing.Process(
+        target=run_Metaphlan4, 
+        kwargs={
+            "input": os.path.join(out_dir, "splited_reads", f"{fileHeader}.bacteria.fq.gz"),
+            "out_dir": os.path.join(out_dir, "Bacteria_results"),
+            "tool_path": mpa_path,
+            "fileHeader": fileHeader,
+            "metaphlan4_db_path": metaphlan4_db_path,
+            "threads": threads
+        }
+    )
     p2 = multiprocessing.Process(
         target=run_RGI, 
         kwargs={
@@ -439,89 +439,89 @@ def bacterial_stage(out_dir, fileHeader, split_script, mpa_path, rgi_path, CARD_
             "threads": threads
         }
     )
-    # p1.start()
+    p1.start()
     p2.start()
-    # p1.join()
+    p1.join()
     p2.join()
 
-    # generateMetaphlan4Report(
-    #     fileHeader=fileHeader,
-    #     metaphlan4ResultsPath=os.path.join(out_dir, "Bacteria_results"),
-    #     kraken2_report=kraken2_report, RPM_threshold=RPM_threshold
-    # )
+    generateMetaphlan4Report(
+        fileHeader=fileHeader,
+        metaphlan4ResultsPath=os.path.join(out_dir, "Bacteria_results"),
+        kraken2_report=kraken2_report, RPM_threshold=RPM_threshold
+    )
 
 def viral_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, bt_viral_db_path, 
                 virstrain_path, virstrain_db_path, virstrain_db_list, acc2taxid_path,
                 kraken2_report, RPM_threshold=1, threads=8):
-    # split_reads(
-    #     kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
-    #     kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
-    #     fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
-    #     out_dir=os.path.join(out_dir,"splited_reads"), 
-    #     fileHeader=fileHeader, reads_type="viruses", 
-    #     script_path=split_script
-    # )
-    # run_Bowtie2(
-    #     input=os.path.join(out_dir,"splited_reads", f"{fileHeader}.viruses.fq.gz"),
-    #     out_dir=os.path.join(out_dir,"Viruses_results"),
-    #     bt_path=bt_path,
-    #     taxonkit_path=taxonkit_path,
-    #     db_path=bt_viral_db_path,
-    #     fileHeader=fileHeader,
-    #     db_type="viruses",
-    #     acc2taxid_path=acc2taxid_path,
-    #     threads=threads
-    # )
+    split_reads(
+        kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
+        kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
+        fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+        out_dir=os.path.join(out_dir,"splited_reads"), 
+        fileHeader=fileHeader, reads_type="viruses", 
+        script_path=split_script
+    )
+    run_Bowtie2(
+        input=os.path.join(out_dir,"splited_reads", f"{fileHeader}.viruses.fq.gz"),
+        out_dir=os.path.join(out_dir,"Viruses_results"),
+        bt_path=bt_path,
+        taxonkit_path=taxonkit_path,
+        db_path=bt_viral_db_path,
+        fileHeader=fileHeader,
+        db_type="viruses",
+        acc2taxid_path=acc2taxid_path,
+        threads=threads
+    )
 
-    # generateBowtie2Report(
-    #     fileHeader=fileHeader, 
-    #     bowtie2FungiResultsPath=os.path.join(out_dir,"Fungi_results"),
-    #     bowtie2VirusesResultsPath=os.path.join(out_dir,"Viruses_results"),
-    #     kraken2_report=kraken2_report, RPM_threshold=RPM_threshold,
-    #     type="viruses"
-    # )
+    generateBowtie2Report(
+        fileHeader=fileHeader, 
+        bowtie2FungiResultsPath=os.path.join(out_dir,"Fungi_results"),
+        bowtie2VirusesResultsPath=os.path.join(out_dir,"Viruses_results"),
+        kraken2_report=kraken2_report, RPM_threshold=RPM_threshold,
+        type="viruses"
+    )
 
-    # run_VirStrain(
-    #     viral_fq_gz=os.path.join(out_dir,"splited_reads", f"{fileHeader}.viruses.fq.gz"),
-    #     viral_report=os.path.join(out_dir, "Viruses_results", f"{fileHeader}.viruses.report"),
-    #     virstrain_list=virstrain_db_list,
-    #     out_dir=os.path.join(out_dir,"Viral_strains"),
-    #     tool_path=virstrain_path,
-    #     db_path=virstrain_db_path,
-    #     fileHeader=fileHeader
-    # )
+    run_VirStrain(
+        viral_fq_gz=os.path.join(out_dir,"splited_reads", f"{fileHeader}.viruses.fq.gz"),
+        viral_report=os.path.join(out_dir, "Viruses_results", f"{fileHeader}.viruses.report"),
+        virstrain_list=virstrain_db_list,
+        out_dir=os.path.join(out_dir,"Viral_strains"),
+        tool_path=virstrain_path,
+        db_path=virstrain_db_path,
+        fileHeader=fileHeader
+    )
     return
 
 def fungal_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, bt_fungal_db_path, 
                  acc2taxid_path, kraken2_report, RPM_threshold=10, threads=8):
-    # split_reads(
-    #     kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
-    #     kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
-    #     fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
-    #     out_dir=os.path.join(out_dir,"splited_reads"), 
-    #     fileHeader=fileHeader, reads_type="fungi", 
-    #     script_path=split_script
-    # )
+    split_reads(
+        kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
+        kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
+        fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+        out_dir=os.path.join(out_dir,"splited_reads"), 
+        fileHeader=fileHeader, reads_type="fungi", 
+        script_path=split_script
+    )
 
-    # run_Bowtie2(
-    #     input=os.path.join(out_dir,"splited_reads", f"{fileHeader}.fungi.fq.gz"),
-    #     out_dir=os.path.join(out_dir,"Fungi_results"),
-    #     bt_path=bt_path,
-    #     taxonkit_path=taxonkit_path,
-    #     db_path=bt_fungal_db_path,
-    #     fileHeader=fileHeader,
-    #     db_type="fungi",
-    #     acc2taxid_path=acc2taxid_path,
-    #     threads=threads
-    # )
+    run_Bowtie2(
+        input=os.path.join(out_dir,"splited_reads", f"{fileHeader}.fungi.fq.gz"),
+        out_dir=os.path.join(out_dir,"Fungi_results"),
+        bt_path=bt_path,
+        taxonkit_path=taxonkit_path,
+        db_path=bt_fungal_db_path,
+        fileHeader=fileHeader,
+        db_type="fungi",
+        acc2taxid_path=acc2taxid_path,
+        threads=threads
+    )
 
-    # generateBowtie2Report(
-    #     fileHeader=fileHeader, 
-    #     bowtie2FungiResultsPath=os.path.join(out_dir,"Fungi_results"),
-    #     bowtie2VirusesResultsPath=os.path.join(out_dir,"Viruses_results"),
-    #     kraken2_report=kraken2_report, RPM_threshold=RPM_threshold,
-    #     type="fungi"
-    # )
+    generateBowtie2Report(
+        fileHeader=fileHeader, 
+        bowtie2FungiResultsPath=os.path.join(out_dir,"Fungi_results"),
+        bowtie2VirusesResultsPath=os.path.join(out_dir,"Viruses_results"),
+        kraken2_report=kraken2_report, RPM_threshold=RPM_threshold,
+        type="fungi"
+    )
 
     return
 
@@ -558,41 +558,41 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
     else:
         paired = False
 
-    # if paired==True:
-    #     run_fastp(
-    #         input_1=input_1, input_2=input_2, out_dir=os.path.join(out_dir,"QC"), 
-    #         tool_path=fastp_path, fileHeader=fileHeader, threads=threads,
-    #         paired=paired, min_len=15
-    #     )
+    if paired==True:
+        run_fastp(
+            input_1=input_1, input_2=input_2, out_dir=os.path.join(out_dir,"QC"), 
+            tool_path=fastp_path, fileHeader=fileHeader, threads=threads,
+            paired=paired, min_len=15
+        )
         
-    #     remove_rRNA(
-    #         input_1=os.path.join(out_dir,"QC",f"{fileHeader}_1.clean.fq.gz"), 
-    #         input_2=os.path.join(out_dir,"QC",f"{fileHeader}_2.clean.fq.gz"), 
-    #         out_dir=os.path.join(out_dir,"no_rRNA"), 
-    #         tool_path=bowtie2_path, db_path=ref_human_db,
-    #         fileHeader=fileHeader, threads=threads, min_len=15, paired=paired
-    #     )
-    # else:
-    #     run_fastp(
-    #         input_1=input_1, out_dir=os.path.join(out_dir,"QC"), 
-    #         tool_path=fastp_path, fileHeader=fileHeader, threads=threads,
-    #         paired=paired, min_len=15
-    #     )
-    #     # print(out_dir)
-    #     # print(os.path.join(out_dir,"QC",f"{fileHeader}.clean.fq.gz"))
-    #     remove_rRNA(
-    #         input_1=os.path.join(out_dir,"QC",f"{fileHeader}.clean.fq.gz"), 
-    #         out_dir=os.path.join(out_dir,"no_rRNA"), 
-    #         tool_path=bowtie2_path, db_path=ref_human_db,
-    #         fileHeader=fileHeader, threads=threads, min_len=15, paired=paired
-    #     )
+        remove_rRNA(
+            input_1=os.path.join(out_dir,"QC",f"{fileHeader}_1.clean.fq.gz"), 
+            input_2=os.path.join(out_dir,"QC",f"{fileHeader}_2.clean.fq.gz"), 
+            out_dir=os.path.join(out_dir,"no_rRNA"), 
+            tool_path=bowtie2_path, db_path=ref_human_db,
+            fileHeader=fileHeader, threads=threads, min_len=15, paired=paired
+        )
+    else:
+        run_fastp(
+            input_1=input_1, out_dir=os.path.join(out_dir,"QC"), 
+            tool_path=fastp_path, fileHeader=fileHeader, threads=threads,
+            paired=paired, min_len=15
+        )
+        # print(out_dir)
+        # print(os.path.join(out_dir,"QC",f"{fileHeader}.clean.fq.gz"))
+        remove_rRNA(
+            input_1=os.path.join(out_dir,"QC",f"{fileHeader}.clean.fq.gz"), 
+            out_dir=os.path.join(out_dir,"no_rRNA"), 
+            tool_path=bowtie2_path, db_path=ref_human_db,
+            fileHeader=fileHeader, threads=threads, min_len=15, paired=paired
+        )
 
-    # run_Kraken2(
-    #     input=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
-    #     out_dir=os.path.join(out_dir,"Kraken2_results"), 
-    #     fileHeader=fileHeader, tool_path=kraken2_path,
-    #     db_path=nt_microbial, threads=threads
-    # )
+    run_Kraken2(
+        input=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+        out_dir=os.path.join(out_dir,"Kraken2_results"), 
+        fileHeader=fileHeader, tool_path=kraken2_path,
+        db_path=nt_microbial, threads=threads
+    )
 
     p1 = multiprocessing.Process(target=bacterial_stage, 
         kwargs={

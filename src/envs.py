@@ -22,4 +22,4 @@ CARD_DB_PATH = "/computenodes/node35/team3/wjiang34/pathogen_detection/pipeline/
 VIRSTRAIN_DB_PATH = "/computenodes/node35/team3/wjiang34/dataRef/VirStrainDB"
 VIRSTRAIN_DB_LIST = "/computenodes/node35/team3/wjiang34/RTTAP/src/VirStrain_namelist.txt"
 
-ACC2TAXID_PATH = "/computenodes/node35/team3/wjiang34/RTTAP/src"
+ACC2TAXID_PATH = "/computenodes/node35/team3/wjiang34/RTTAP/src/dependencies"
