@@ -6,19 +6,20 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     ```
     git clone https://github.com/weijiang34/RTTAP.git
     ```
-2. Install depoendencies:
-- create conda environment:
+2. Install depoendencies:  
+- create conda environment:  
     ```
     cd ./RTTAP/
     conda create -f environment.yml
     ```
-- Download databases: 
+- Download databases:  
     Download requeired databases from:
     ```
+    
     ```
     Unzip them:
     ```
-    tar -zxvf 
+    tar -zxvf RTTAP_DBs.tar.gz
     ```
     and put them under folder: 
     ```
@@ -34,7 +35,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
         |--./viral_btdb/
         |--./virstrain_db/
     ```
-- Taxonkit, Fastp, MetaPhlAn4, Bowtie2
+- Taxonkit, Fastp, MetaPhlAn4, Bowtie2  
     ```
     conda install -c bioconda fastp 
     conda install -c bioconda taxonkit 
@@ -46,34 +47,29 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     - Fastp: https://github.com/OpenGene/fastp  
     - MetaPhlAn4: https://github.com/biobakery/MetaPhlAn  
     - Bowtie2: https://github.com/BenLangmead/bowtie2  
-- Kraken2
+- Kraken2  
     Download Kraken2 using the following command:
     ```
     git clone https://github.com/DerrickWood/kraken2.git
     ```
     And please refer to the instructions in *Installation* part: https://github.com/DerrickWood/kraken2/wiki/Manual#installation to install Kraken2
-- RGI & CARD
-    rig:
+- RGI  
+    RGI:
     ```
     conda install -c conda-forge -c bioconda -c defaults rgi
     ```
-    CARD:
-    ```
-    wget https://card.mcmaster.ca/latest/data
-    tar -xvf data ./card.json
-    ```
-    For CARD download, please refer to *Running RGI bwt with FASTQ files* in: https://github.com/arpcard/rgi/blob/master/docs/rgi_bwt.rst
 - VirStrain
     ```
     conda install -c bioconda virstrain
     ```
     GiHub: https://github.com/liaoherui/VirStrain
-
+3. Config your environments
+    Open ```./RTTAP/src/envs.py``` with text editor and set all the required environmental variables according to you computer's environment. Plese only modify the texts between ```### For users modification START``` and ```### For users modification END``` accordingly.
 # Test sample
 Once successfully installed all the dependencies, you can run the following command to have a quick test:
+- Download test sample from https://portland-my.sharepoint.com/:f:/g/personal/wjiang34-c_my_cityu_edu_hk/El6uED6jVfxNtEG21Jc27XoBNRiDw6Z08uNxxPRHJtXhBA?e=qRWWGE  
+Move this test sample to your linux system and run th efollowing command to unzip.
 ```
-# Download test sample
-
 tar -zxvf test_sample.tar.gz
 cd test_sample/
 
