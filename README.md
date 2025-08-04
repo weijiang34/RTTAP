@@ -16,10 +16,10 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     Download requeired databases from:
     ```
     # Baidu Netdisk
-    https://pan.baidu.com/s/1KP8iiDW13HzlTGHdkWqfIQ?pwd=63g6
-    password:63g6
+    https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg
     # or Google Drive:
-    https://drive.google.com/uc?id=1SMx0wD8_z0fn44brOmlDkInM1V6JQxbw
+    https://drive.google.com/uc?id=1SMx0wD8_z0fn44brOmlDkInM1V6JQxbw (databases)
+    https://drive.google.com/uc?id=1r-PQ0x-uLNhgHKxA1TaXXmL_2xM1DAqU (dependencies)
     ```
     Unzip them:
     ```
