@@ -116,16 +116,16 @@ The test sample is a toy dataset which includes simulated reads from several com
     RTTAP supports both paried-end fastq files and single-end fastq files. 
     If you have paried-end data, you can use the ```-i``` and ```-I``` to specify paired inputs:
     ```
-    python path/to/RTTAP/src/RTTAP.py -i input_1.fq.gz -I input_2.fq.gz -o output_path/
+    python path/to/RTTAP/src/RTTAP.py end_to_end -i input_1.fq.gz -I input_2.fq.gz -o output_path/
     ```
     If your data is single-end, you can use ```-i``` to specify your input and ignore the ```-I```:
     ```
-    python path/to/RTTAP/src/RTTAP.py -i input_1.fq.gz -o output_path/
+    python path/to/RTTAP/src/RTTAP.py end_to_end -i input_1.fq.gz -o output_path/
     ```
 - Output  
     RTTAP supports user-customized output directories by using ```-o```:
     ```
-    python path/to/RTTAP/src/RTTAP.py -i input_1.fq.gz -I input_2.fq.gz -o path/to/your/output_dir
+    python path/to/RTTAP/src/RTTAP.py end_to_end -i input_1.fq.gz -I input_2.fq.gz -o path/to/your/output_dir
     ```
 - Filtering thresholds  
     RTTAP uses several thresholds to filter out extremely low abundance taxonmies. Users can freely adjust these thresholds according to their wishes. 
@@ -139,7 +139,7 @@ The test sample is a toy dataset which includes simulated reads from several com
 - Threads  
     RTTAP supports users to adjust working threads by using ```-t```, depending on their available computing resources.
     ```
-    python path/to/RTTAP/src/RTTAP.py -i input_1.fq.gz -I input_2.fq.gz -o output_path/ -t num_of_threads
+    python path/to/RTTAP/src/RTTAP.py end_to_end -i input_1.fq.gz -I input_2.fq.gz -o output_path/ -t num_of_threads
     ```
     The default valeus is set to ```-t 8```.
 
