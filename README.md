@@ -49,7 +49,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     conda install -c bioconda fastp 
     conda install -c bioconda taxonkit 
     conda install -c bioconda bowtie2 
-    conda install -c bioconda metaphlan
+    conda install -c bioconda metaphlan==4.0
     ```
     Detailed instructions for installing them are listed below:  
     - Taxonkit: https://github.com/shenwei356/taxonkit  
