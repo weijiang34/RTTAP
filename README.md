@@ -31,7 +31,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     mv RTTAP_DBs/* path/to/RTTAP/src/databases/
     mv dependencies/* path/to/RTTAP/src/dependencies/
     ```
-    The database should looks like this:
+    Databases and dependencies should look like this:
     ```
     --./RTTAP/src/databases/
         |--./CARD/
