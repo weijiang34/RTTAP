@@ -92,12 +92,11 @@ The test sample is a toy dataset which includes simulated reads from several com
 - Overview  
     At any time of using RTTAP, you can use the following command to check each of its parameters and corresponding meaning.
     ```
-    python path/to/RTTAP/src/RTTAP.py --help
+    python path/to/RTTAP/src/RTTAP.py end_to_end --help
 
-    # usage: RTTAP [-h] -i INPUT_1 [-I INPUT_2] [-o OUTPUT_DIR] [--rpm_b RPM_B] [--rpm_v RPM_V] [--rpm_f RPM_F] [-t THREADS]
-    # 
-    # A Read-based Total-infecTome Analysis Pipeline.
-    # 
+    # usage: RTTAP end_to_end [-h] -i INPUT_1 [-I INPUT_2] -o OUTPUT_DIR [-t THREADS] [--rpm_b RPM_B] [--rpm_v RPM_V] [--rpm_f RPM_F]
+    #                     [--skip_rgi] [--skip_virstrain] [--cmd CMD]
+
     # options:
     #   -h, --help            show this help message and exit
     #   -i INPUT_1, --input_1 INPUT_1
@@ -105,12 +104,18 @@ The test sample is a toy dataset which includes simulated reads from several com
     #   -I INPUT_2, --input_2 INPUT_2
     #                         The second input file (".fq", ".fq.gz"; used for paired-end files).
     #   -o OUTPUT_DIR, --output_dir OUTPUT_DIR
-    #                         By default, RTTAP will output to the current folder "./", and there will be a folder "./out/" contaning all the output/intermediate files.
+    #                         Output directory for results.
+    #   -t THREADS, --threads THREADS
+    #                         Threads used for analysis. Default: 8
     #   --rpm_b RPM_B         The cut-off threshold for bacterial categories. Default: 10
     #   --rpm_v RPM_V         The cut-off threshold for viral categories. Default: 1
     #   --rpm_f RPM_F         The cut-off threshold for fungal categories. Default: 10
-    #   -t THREADS, --threads THREADS
-    #                         Threads used for analysis. Default: 8
+    #   --skip_rgi            Skip the ARG analysis. Default: False
+    #   --skip_virstrain      Skip the viruses strain analysis. Default: False
+    #   --cmd CMD             The string of commands to be added to runnning tools. Default: None. For example, when runnning kraken2, '--cmd
+    #                         "--confidence 0.5"' will set the minimum confidence to 0.5 for Kraken2 to classify a sequence. This parameter
+    #                         should be used very carefully as it allows great flexibility while introducing a lot of uncertainty for smoothly
+    #                         running the whole pipeline.
     ```
 - Input  
     RTTAP supports both paried-end fastq files and single-end fastq files. 
