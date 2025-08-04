@@ -135,7 +135,7 @@ The test sample is a toy dataset which includes simulated reads from several com
 - Filtering thresholds  
     RTTAP uses several thresholds to filter out extremely low abundance taxonmies. Users can freely adjust these thresholds according to their wishes. 
     ```
-    python path/to/RTTAP/src/RTTAP.py -i input_1.fq.gz -I input_2.fq.gz -o output_path/ --rpm_b 10 --rpm_v 1 --rpm_f 10
+    python path/to/RTTAP/src/RTTAP.py end_to_end -i input_1.fq.gz -I input_2.fq.gz -o output_path/ --rpm_b 10 --rpm_v 1 --rpm_f 10
 
     # --rpm_b RPM_B         The cut-off threshold for bacterial categories. Default: 10
     # --rpm_v RPM_V         The cut-off threshold for viral categories. Default: 1
