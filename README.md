@@ -24,10 +24,12 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     Unzip them:
     ```
     tar -zxvf RTTAP_DBs.tar.gz
+    tar -zxvf dependencies.tar.gz
     ```
     and put them under folder: 
     ```
-    mv where/you/downloaded path/to/RTTAP/src/databases/
+    mv RTTAP_DBs/* path/to/RTTAP/src/databases/
+    mv dependencies/* path/to/RTTAP/src/dependencies/
     ```
     The database should looks like this:
     ```
@@ -38,6 +40,9 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
         |--./kraken2ntmicrodb/
         |--./viral_btdb/
         |--./virstrain_db/
+    --./RTTAP/src/dependencies/
+        |--./EuPathDB46.seq2taxid.txt
+        |--./viruses.acc2taxid.txt
     ```
 - Taxonkit, Fastp, MetaPhlAn4, Bowtie2  
     ```
