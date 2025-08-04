@@ -84,7 +84,7 @@ tar -zxvf test_sample.tar.gz
 cd test_sample/
 
 # run RTTAP
-python path/to/RTTAP/src/RTTAP.py -i test.fq.gz -o test-output/ -t 8
+python path/to/RTTAP/src/RTTAP.py -i test.fq.gz -o test_output/ -t 8
 ```
 The test sample is a toy dataset which includes simulated reads from several commonly-seen pathegens' genomes. It is a non-paired fastq file, so you will only need to specify one of the input by: ```-i```.
 
