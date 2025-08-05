@@ -15,7 +15,7 @@ RTTAP_ENV_NAME = "mpa"
 ### For users modification END
 
 SPLIT_SCRIPT = os.path.join(RTTAP_PATH, 'src', 'utils', 'extract_kraken_reads_nostdout.py')
-NT_MICROBIAL = "/computenodes/node351/wjiang34/dataRef/kraken2ntmicrodb"# os.path.join(RTTAP_DB_PATH, 'kraken2ntmicrodb')
+NT_MICROBIAL = os.path.join(RTTAP_DB_PATH, 'kraken2ntmicrodb')
 REF_HUMAN_DB = os.path.join(RTTAP_DB_PATH, 'humanrRNA_btdb', 'btHumanrRNAdb')
 BT_VIRAL_DB_PATH = os.path.join(RTTAP_DB_PATH, 'viral_btdb', 'viral_btdb')
 BT_FUNGAL_DB_PATH = os.path.join(RTTAP_DB_PATH, 'EuPathDB46_btdb', 'EuPathDB46_Clean')
