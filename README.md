@@ -16,20 +16,17 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     Download requeired databases from:
     ```
     # Baidu Netdisk
-    https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg
+    https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg (RTTAP_DBs.tar.gz)
     # or Google Drive:
-    https://drive.google.com/uc?id=1SMx0wD8_z0fn44brOmlDkInM1V6JQxbw (databases)
-    https://drive.google.com/uc?id=1r-PQ0x-uLNhgHKxA1TaXXmL_2xM1DAqU (dependencies)
+    https://drive.google.com/uc?id=1SMx0wD8_z0fn44brOmlDkInM1V6JQxbw 
     ```
     Unzip them:
     ```
     tar -zxvf RTTAP_DBs.tar.gz
-    tar -zxvf dependencies.tar.gz
     ```
     and put them under folder: 
     ```
     mv RTTAP_DBs/* path/to/RTTAP/src/databases/
-    mv dependencies/* path/to/RTTAP/src/dependencies/
     ```
     Databases and dependencies should look like this:
     ```
@@ -40,9 +37,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
         |--./kraken2ntmicrodb/
         |--./viral_btdb/
         |--./virstrain_db/
-    --./RTTAP/src/dependencies/
-        |--./EuPathDB46.seq2taxid.txt
-        |--./viruses.acc2taxid.txt
+        |--./seq2taxid/
     ```
 - Taxonkit, Fastp, MetaPhlAn4, Bowtie2  
     ```
