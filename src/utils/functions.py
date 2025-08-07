@@ -12,6 +12,8 @@ import time
 import envs
 
 def run_fastp(input_1, out_dir, tool_path, fileHeader, threads=8, input_2=None, min_len=15, cmd=None):
+    if cmd is None:
+        cmd = ''
     os.makedirs(out_dir, exist_ok=True)
     tmp_script = os.path.join(out_dir, 'run_fastp_tmp.sh')
     logging.info("Running Fastp ...")
@@ -36,26 +38,30 @@ def run_fastp(input_1, out_dir, tool_path, fileHeader, threads=8, input_2=None, 
     os.remove(tmp_script)
 
 def remove_rRNA(input_1, out_dir, tool_path, db_path, fileHeader, threads=8, input_2=None, cmd=None):
+    if cmd is None:
+        cmd = ''
     os.makedirs(out_dir, exist_ok=True)
     logging.info("Removing human rRNA reads ...")
     # print("INFO: Removing human rRNA reads ...")
     if input_2 is not None:
         logging.info(f"Input:\t{input_1}\n\t\t{input_2}")
+        un_conc_path = os.path.join(out_dir, f"{fileHeader}.norRNA.fq")
+        bt2_out_path = os.path.join(out_dir, f"{fileHeader}.norRNA.bowtie2.out")
         bash_commands = [
-            f"{tool_path} -x {db_path} -1 {input_1} -2 {input_2} --un-conc {out_dir}/{fileHeader}.norRNA.fq -S {out_dir}/{fileHeader}.norRNA.bowtie2.out --very-sensitive-local --no-unal -I 1 -p {threads} {cmd}\n",
-            f"mv {out_dir}/{fileHeader}.norRNA.1.fq {out_dir}/{fileHeader}.norRNA.R1.fq\n",
-            f"mv {out_dir}/{fileHeader}.norRNA.2.fq {out_dir}/{fileHeader}.norRNA.R2.fq\n",
-            f"cat {out_dir}/{fileHeader}.norRNA.R1.fq {out_dir}/{fileHeader}.norRNA.R2.fq | sed 's/ /_/g' | gzip -f -c -1 > {out_dir}/{fileHeader}.norRNA.fq.gz\n",
-            f"rm {out_dir}/{fileHeader}.norRNA.R1.fq {out_dir}/{fileHeader}.norRNA.R2.fq\n",
-            f"rm {out_dir}/{fileHeader}.norRNA.bowtie2.out\n",
+            f"{tool_path} -x {db_path} -1 {input_1} -2 {input_2} --un-conc {un_conc_path} -S {bt2_out_path} --very-sensitive-local --no-unal -I 1 -p {threads} {cmd}\n",
+            f"mv {os.path.join(out_dir, f'{fileHeader}.norRNA.1.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R1.fq')}\n",
+            f"mv {os.path.join(out_dir, f'{fileHeader}.norRNA.2.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R2.fq')}\n",
+            f"cat {os.path.join(out_dir, f'{fileHeader}.norRNA.R1.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R2.fq')} | sed 's/ /_/g' | gzip -f -c -1 > {os.path.join(out_dir, f'{fileHeader}.norRNA.fq.gz')}\n",
+            f"rm {os.path.join(out_dir, f'{fileHeader}.norRNA.R1.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R2.fq')}\n",
+            f"rm {bt2_out_path}\n",
         ]
     else:
         logging.info(f"Input:\t{input_1}")
         bash_commands = [
             f"{tool_path} -x {db_path} -U {input_1} --un {os.path.join(out_dir, f'{fileHeader}.norRNA.fq')} -S {os.path.join(out_dir, f'{fileHeader}.norRNA.bowtie2.out')} --very-sensitive-local --no-unal -I 1 -p {threads} {'' if cmd is None else cmd}\n",
-            f"cat {out_dir}/{fileHeader}.norRNA.fq | sed 's/ /_/g' | gzip -f -c -1 > {out_dir}/{fileHeader}.norRNA.fq.gz\n",
-            f"rm {out_dir}/{fileHeader}.norRNA.fq\n",
-            f"rm {out_dir}/{fileHeader}.norRNA.bowtie2.out\n",
+            f"cat {os.path.join(out_dir, f'{fileHeader}.norRNA.fq')} | sed 's/ /_/g' | gzip -f -c -1 > {os.path.join(out_dir, f'{fileHeader}.norRNA.fq.gz')}\n",
+            f"rm {os.path.join(out_dir, f'{fileHeader}.norRNA.fq')}\n",
+            f"rm {os.path.join(out_dir, f'{fileHeader}.norRNA.bowtie2.out')}\n",
         ]
     with open(f"{out_dir}/remove_rRNA_tmp.sh", 'w') as f:
         f.writelines("#!/bin/bash\n")
@@ -68,6 +74,8 @@ def remove_rRNA(input_1, out_dir, tool_path, db_path, fileHeader, threads=8, inp
     os.remove(f"{out_dir}/remove_rRNA_tmp.sh")
 
 def run_Kraken2(input, out_dir, fileHeader, tool_path, db_path, threads=8, cmd=None):
+    if cmd is None:
+        cmd = ''
     os.makedirs(out_dir, exist_ok=True)
     logging.info("Running Kraken2 ...")
     kraken_out = os.path.join(out_dir, f"{fileHeader}.norRNA.kraken2ntmicrodb.out")
