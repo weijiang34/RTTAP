@@ -175,7 +175,10 @@ def append_taxid(bt_results_path, acc2taxid_path, reads_type, fileHeader):
 def taxa_path_LCA(resultsPath, fileHeader, reads_type):
     def readLCA(path):
         splittedPath = path.str.split(";", expand=True)
-        return ";".join(splittedPath.iloc[0,:][splittedPath.apply(pd.Series.nunique)==1].tolist())
+        values = splittedPath.iloc[0, :][splittedPath.apply(pd.Series.nunique) == 1].tolist()
+        # change into string and filter out NaN
+        values = [str(v) for v in values if pd.notnull(v)]
+        return ";".join(values)
 
     if reads_type in ["viruses", "fungi", "archaea"]:
         read2taxaPath = pd.read_csv(f"{resultsPath}/{fileHeader}.{reads_type}.multi.reads2taxid_path.tmp", header=None, names=["readId", "refId", "taxid", "namePath", "taxaPath"], sep='\t')
