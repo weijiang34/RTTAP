@@ -17,6 +17,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     ```
     # Baidu Netdisk
     https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg (RTTAP_DBs.tar.gz)
+    password: k4tg
     # or Google Drive:
     https://drive.google.com/uc?id=1SMx0wD8_z0fn44brOmlDkInM1V6JQxbw 
     ```
@@ -64,10 +65,17 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     ```
     GitHub: https://github.com/arpcard/rgi
 - VirStrain
+    NOTE: There's a known issue with the newest version of VirStrain. We recommend using the version in the following link:
     ```
-    git clone https://github.com/liaoherui/VirStrain.git
+    # Baidu Netdisk
+    https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg (VirStrain.tar.gz)
+    password: k4tg
+    # or Google drive
+    https://drive.google.com/uc?id=1_VFczaU2vKWOxwB34CMhUGWOkS6tcSbo
     ```
     GiHub: https://github.com/liaoherui/VirStrain
+    
+    
 3. Config your environments
     Open ```./RTTAP/src/envs.py``` with text editor and set all the required environmental variables according to you computer's environment. Plese only modify the texts between ```### For users modification START``` and ```### For users modification END``` accordingly.
 # Test sample
