@@ -64,7 +64,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     conda install -c conda-forge -c bioconda -c defaults rgi
     ```
     GitHub: https://github.com/arpcard/rgi
-- VirStrain
+- VirStrain  
     NOTE: There's a known issue with the newest version of VirStrain. We recommend using the version in the following link:
     ```
     # Baidu Netdisk
