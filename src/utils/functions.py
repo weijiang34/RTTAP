@@ -354,8 +354,17 @@ def generateBowtie2Report(fileHeader, bowtie2VirusesResultsPath, bowtie2FungiRes
     report.to_csv("{}/{}.{}.report".format(bowtie2VirusesResultsPath if type=="viruses" else bowtie2FungiResultsPath, fileHeader, type), sep='\t', index=None)
 
 def generateMetaphlan4Report(fileHeader, metaphlan4ResultsPath, kraken2_report, RPM_threshold=10):
-    out = pd.read_table("{}/{}.metaphlan4.out".format(metaphlan4ResultsPath, fileHeader), header=4, sep='\t') \
-                                .rename({"#clade_name":"taxaPath", "estimated_number_of_reads_from_the_clade":"reads", "clade_taxid":"taxaIDPath"}, axis=1)
+    # detect header line
+    metaphlan4_out_path = "{}/{}.metaphlan4.out".format(metaphlan4ResultsPath, fileHeader)
+    def find_metaphlan_header_line(filepath):
+        with open(filepath, 'r') as f:
+            for i, line in enumerate(f):
+                if "#clade_name" in line:
+                    return i
+        raise ValueError("No header line with '#clade_name' found.")
+
+    header_line = find_metaphlan_header_line(metaphlan4_out_path)
+    out = pd.read_table(metaphlan4_out_path, header=header_line, sep='\t').rename({"#clade_name":"taxaPath", "estimated_number_of_reads_from_the_clade":"reads", "clade_taxid":"taxaIDPath"}, axis=1)
     k2_report = pd.read_table(kraken2_report, sep='\t',header=None,names=["percent","reads","reads_direct","rank","taxid","taxa"])
     total_reads_count = k2_report[k2_report["taxa"].isin(["root","unclassified"])]["reads"].sum(axis=0)
     
