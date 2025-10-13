@@ -11,7 +11,7 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
 Links to the dependencies are listed below:  
     - Fastp: https://github.com/OpenGene/fastp  
     - Taxonkit: https://github.com/shenwei356/taxonkit  
-    - SeqKit: https://bioinf.shenwei.me/seqkit/
+    - SeqKit: https://bioinf.shenwei.me/seqkit/  
     - MetaPhlAn4 (version: 4.0, 4.1): https://github.com/biobakery/MetaPhlAn  
     - Bowtie2: https://github.com/BenLangmead/bowtie2   
     - Kraken2: https://github.com/DerrickWood/kraken2  
