@@ -1,8 +1,7 @@
-import argparse
 import os
-import sys
-from utils import functions
-import envs
+import argparse
+import multiprocessing as mp
+
 import logging
 logging.basicConfig(
     level=logging.DEBUG, 
@@ -10,311 +9,367 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-# Requirements:
+import envs
+from utils import workflows 
+from utils.api_downstream import generate_overall_report
+
+# Steps:
 # 1. fastp
 # 2. bowtie2
 # 3. Kraken2
-# 4. Metaphlan4
+# 4. (can be parallel)
+#    - Metaphlan4
+#    - Virus bowtie2
+#    - Fungi bowtie2
 # 5. RGI
 # 6. VirStrain
-# 7. taxonkit
 
-def check_file_exists(file_path, description):
-    """Check if file exists. If not, report error and exit."""
-    if not os.path.exists(file_path):
-        logging.error(f"{description} file not found: {file_path}")
-        sys.exit(1)
-    return True
+def run_qc(args, configs):
+    wf = workflows.QualityControl(
+        input_1=args.input_1,
+        input_2=args.input_2,
+        out_dir=configs.qc_dir,
+        fileHeader=configs.fileHeader,
 
-def check_step_completed(step_file, description):
-    """Check if steps are finished."""
-    if os.path.exists(step_file):
-        logging.info(f"{description} already completed, skipping...")
-        return True
-    return False
+        tool_path=envs.FASTP_PATH,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
 
-def run_qc(args):
-    file_header = os.path.basename(args.output_dir)
-    output_html = os.path.join(args.output_dir, "QC", f"{file_header}.html")
-    
-    # 检查是否已存在QC输出文件
-    if check_step_completed(output_html, "Quality control"):
-        return
-    
-    # 确保输入文件存在
-    check_file_exists(args.input_1, "Input file 1")
-    if args.input_2 is not None:
-        check_file_exists(args.input_2, "Input file 2")
-    
-    print("INFO: Running quality control...")
-    functions.run_fastp(
-        input_1=args.input_1, 
-        input_2=args.input_2, 
-        out_dir=os.path.join(args.output_dir, "QC"), 
-        tool_path=envs.FASTP_PATH, 
-        fileHeader=file_header, 
         threads=args.threads,
-        min_len=15,
-        cmd=args.cmd
-    )
-    
-    # 验证QC输出
-    check_file_exists(output_html, "QC output")
+        min_len=args.min_len,
+        cmd=args.cmd,
 
-def run_rrna_removal(args):
-    file_header = os.path.basename(args.output_dir)
-    output_fq = os.path.join(args.output_dir, "no_rRNA", f"{file_header}.norRNA.fq.gz")
-    
-    # 检查是否已存在rRNA去除输出文件
-    # if True skip
-    if check_step_completed(output_fq, "rRNA removal"):
-        return
-    
-    # 检查QC步骤是否完成
-    qc_output_html = os.path.join(args.output_dir, "QC", f"{file_header}.html")
-    check_file_exists(qc_output_html, "QC output")
-    
-    logging.info("Removing rRNA reads...")
-    # print("INFO: Removing rRNA reads...")
-    functions.remove_rRNA(
-        input_1=os.path.join(args.output_dir, "QC", f"{file_header}.clean.R1.fq.gz") if args.input_2 
-                else os.path.join(args.output_dir, "QC", f"{file_header}.clean.fq.gz"),
-        input_2=os.path.join(args.output_dir, "QC", f"{file_header}.clean.R2.fq.gz") if args.input_2 else None,
-        out_dir=os.path.join(args.output_dir, "no_rRNA"), 
-        tool_path=envs.BOWTIE2_PATH, 
-        db_path=envs.REF_HUMAN_DB,
-        fileHeader=file_header, 
-        threads=args.threads, 
-        cmd=args.cmd
+        force=args.force
     )
-    
-    # 验证rRNA去除输出
-    check_file_exists(output_fq, "rRNA removal output")
+    wf.run()
 
-def run_kraken2(args):
-    file_header = os.path.basename(args.output_dir)
-    kraken_out = os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official")
-    
-    # 检查是否已存在Kraken2输出文件
-    if check_step_completed(kraken_out, "Kraken2 classification"):
-        return
-    
-    # 检查rRNA去除步骤是否完成
-    rrna_output = os.path.join(args.output_dir, "no_rRNA", f"{file_header}.norRNA.fq.gz")
-    check_file_exists(rrna_output, "rRNA removal output")
-    
-    logging.info("Running Kraken2 classification...")
-    # print("INFO: Running Kraken2 classification...")
-    functions.run_Kraken2(
-        input=rrna_output, 
-        out_dir=os.path.join(args.output_dir, "Kraken2_results"), 
-        fileHeader=file_header, 
-        tool_path=envs.KRAKEN2_PATH,
-        db_path=envs.NT_MICROBIAL, 
+def run_remove_host(args, configs):
+    wf = workflows.HostRemoval(
+        input_1=configs.clean_fq_1,
+        input_2=configs.clean_fq_2,
+        out_dir=configs.nohost_dir,
+        fileHeader=configs.fileHeader,
+
+        tool_path=envs.BOWTIE2_PATH,
+        db_dir=envs.REF_HOST_DB,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+
         threads=args.threads,
         cmd=args.cmd,
-    )
-    
-    # 验证Kraken2输出
-    check_file_exists(kraken_out, "Kraken2 output")
 
-def run_bacterial_analysis(args):
-    file_header = os.path.basename(args.output_dir)
-    mpa_report = os.path.join(args.output_dir, "Bacteria_results", f"{file_header}.bacteria.report")
-    
-    # 检查是否已存在细菌分析结果
-    if check_step_completed(mpa_report, "Bacterial analysis"):
-        return
-    
-    # 检查Kraken2步骤是否完成
-    kraken_out = os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official")
-    check_file_exists(kraken_out, "Kraken2 output")
-    
-    logging.info("Running bacterial analysis...")
-    # print("INFO: Running bacterial analysis...")
-    functions.bacterial_stage(
-        out_dir=args.output_dir, 
-        fileHeader=file_header, 
-        split_script=envs.SPLIT_SCRIPT, 
-        mpa_path=envs.METAPHLAN4_PATH, 
-        rgi_path=envs.RGI_PATH, 
-        metaphlan4_db_path=envs.METAPHLAN4_DB_PATH, 
-        CARD_db=envs.CARD_DB_PATH, 
-        kraken2_report=os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official"),
+        force=args.force
+    )
+    wf.run()
+
+def run_recruit_reads(args, configs):
+    wf = workflows.ReadRecruitment(
+        input=configs.nohost_fq,
+        out_dir=configs.k2_dir,
+        tool_path=envs.KRAKEN2_PATH,
+        db_path=envs.NT_MICROBIAL,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+        fileHeader=configs.fileHeader,
+
+        threads=args.threads,
+        cmd=args.cmd,
+
+        force=args.force
+    )
+    wf.run()
+
+def run_bacteria(args, configs):
+    wf1 = workflows.ReadExtractor(
+        kraken_out=configs.k2_out,
+        kraken_report=configs.k2_report,
+        nohost_fq_gz=configs.nohost_fq,
+        out_dir=configs.bac_dir,
+        fileHeader=configs.fileHeader,
+
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+        split_script_path=envs.SPLIT_SCRIPT_PATH,
+
+        threads=args.threads,
+        reads_type="bacteria",
+
+        force=args.force
+    )
+    wf1.run()
+
+    wf2 = workflows.TaxonomyBacteriaWorkflow(
+        input=configs.bac_fq,
+        k2_report_path=configs.k2_report,
+        mpa_report_path=configs.mpa_report,
+        bac_report_path=configs.bac_report,
+
+        out_dir=configs.bac_dir,
+        fileHeader=configs.fileHeader,
+
+        tool_path=envs.METAPHLAN4_PATH,
+        metaphlan4_db_path=envs.METAPHLAN4_DB_PATH,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+
+        threads=args.threads,
         RPM_threshold=args.rpm_b,
-        threads=args.threads,
-        skip_rgi=args.skip_rgi
-    )
-    
-    # 验证细菌分析输出
-    check_file_exists(mpa_report, "Metaphlan4 output")
+        cmd=args.cmd,
 
-def run_viral_analysis(args):
-    file_header = os.path.basename(args.output_dir)
-    viral_report = os.path.join(args.output_dir, "Viruses_results", f"{file_header}.viruses.report")
-    LCA_out = os.path.join(args.output_dir, "Viruses_results", f"{file_header}.viruses.LCA.out")
-    
-    # 检查是否已存在病毒分析结果
-    if check_step_completed(viral_report, "Viral analysis"):
-        return
-    
-    # 检查Kraken2步骤是否完成
-    kraken_out = os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official")
-    check_file_exists(kraken_out, "Kraken2 output")
-    
-    logging.info("Running viral analysis...")
-    # print("INFO: Running viral analysis...")
-    functions.viral_stage(
-        out_dir=args.output_dir, 
-        fileHeader=file_header, 
-        split_script=envs.SPLIT_SCRIPT, 
-        taxonkit_path=envs.TAXONKIT_PATH, 
-        bt_path=envs.BOWTIE2_PATH, 
-        bt_viral_db_path=envs.BT_VIRAL_DB_PATH, 
-        virstrain_path=envs.VIRSTRAIN_PATH, 
-        virstrain_db_path=envs.VIRSTRAIN_DB_PATH, 
-        virstrain_db_list=envs.VIRSTRAIN_DB_LIST, 
-        acc2taxid_path=envs.ACC2TAXID_PATH,
-        kraken2_report=os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official"),
+        force=args.force
+    )
+    wf2.run()
+
+    # if not args.skip_rgi:
+    #     wf = workflows.ARGIdentification(
+    #         input_fq=configs.bac_fq,
+    #         out_dir=configs.ARG_dir,
+    #         fileHeader=configs.fileHeader,
+
+    #         tool_path=envs.RGI_PATH,
+    #         db_path=envs.CARD_DB_PATH,
+    #         conda_dir=envs.CONDA_PATH,
+    #         env_name=envs.RTTAP_ENV_NAME,
+
+    #         threads=args.threads,
+    #         cmd=args.cmd,
+
+    #         force=args.force
+    #     )
+    #     wf.run()
+
+def run_viruses(args, configs):
+    wf1 = workflows.ReadExtractor(
+        kraken_out=configs.k2_out,
+        kraken_report=configs.k2_report,
+        nohost_fq_gz=configs.nohost_fq,
+        out_dir=configs.vir_dir,
+        fileHeader=configs.fileHeader,
+
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+        split_script_path=envs.SPLIT_SCRIPT_PATH,
+
+        threads=args.threads,
+        reads_type="viruses",
+
+        force=args.force
+    )
+    wf1.run()
+
+    wf2 = workflows.TaxonomyBowtie2Workflow(
+        input=configs.vir_fq,
+        k2_report_path=configs.k2_report,
+        lca_report_path=configs.vir_lca_out,
+        bt_report_path=configs.vir_report,
+        out_dir=configs.vir_dir,
+        fileHeader=configs.fileHeader,
+
+        bt_path=envs.BOWTIE2_PATH,
+        taxonkit_path=envs.TAXONKIT_PATH,
+        db_type="viruses",
+        acc2taxid_dir=envs.ACC2TAXID_DIR,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+
+        threads=args.threads,
         RPM_threshold=args.rpm_v,
+        cmd=args.cmd,
+
+        force=args.force
+    )
+    wf2.run()
+
+    # if not args.skip_virstrain:
+    #     wf3 = workflows.VirusStrainProfiling(
+    #         input_fq_gz=configs.vir_fq,
+    #         out_dir=configs.virus_strain_dir,
+    #         fileHeader=configs.fileHeader,
+
+    #         virus_report_path=configs.vir_report,
+    #         tool_path=envs.VIRSTRAIN_PATH,
+    #         db_path=envs.VIRSTRAIN_DB_PATH,
+    #         virstrain_list_path=envs.VIRSTRAIN_DB_LIST,
+    #         conda_dir=envs.CONDA_PATH,
+    #         env_name=envs.RTTAP_ENV_NAME,
+
+    #         threads=args.threads,
+    #         cmd=args.cmd,
+
+    #         force=args.force
+    #     )
+    #     wf3.run()
+
+def run_fungi(args, configs):
+    wf1 = workflows.ReadExtractor(
+        kraken_out=configs.k2_out,
+        kraken_report=configs.k2_report,
+        nohost_fq_gz=configs.nohost_fq,
+        out_dir=configs.fun_dir,
+        fileHeader=configs.fileHeader,
+
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+        split_script_path=envs.SPLIT_SCRIPT_PATH,
+
         threads=args.threads,
-        skip_virstrain=args.skip_virstrain
-    )
-    
-    # 验证病毒分析输出
-    check_file_exists(viral_report, "Viral taxonomic analysis output")
+        reads_type="fungi",
 
-def run_fungal_analysis(args):
-    file_header = os.path.basename(args.output_dir)
-    fungal_report = os.path.join(args.output_dir, "Fungi_results", f"{file_header}.fungi.report")
-    
-    # 检查是否已存在真菌分析结果
-    if check_step_completed(fungal_report, "Fungal analysis"):
-        return
-    
-    # 检查Kraken2步骤是否完成
-    kraken_out = os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official")
-    check_file_exists(kraken_out, "Kraken2 output")
-    
-    logging.info("Running fungal analysis...")
-    # print("INFO: Running fungal analysis...")
-    functions.fungal_stage(
-        out_dir=args.output_dir, 
-        fileHeader=file_header, 
-        split_script=envs.SPLIT_SCRIPT, 
-        taxonkit_path=envs.TAXONKIT_PATH, 
-        bt_path=envs.BOWTIE2_PATH, 
-        bt_fungal_db_path=envs.BT_FUNGAL_DB_PATH, 
-        acc2taxid_path=envs.ACC2TAXID_PATH,
-        kraken2_report=os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official"),
+        force=args.force
+    )
+    wf1.run()
+
+    wf2 = workflows.TaxonomyBowtie2Workflow(
+        input=configs.fun_fq,
+        k2_report_path=configs.k2_report,
+        lca_report_path=configs.fun_lca_out,
+        bt_report_path=configs.fun_report,
+        out_dir=configs.fun_dir,
+        fileHeader=configs.fileHeader,
+
+        bt_path=envs.BOWTIE2_PATH,
+        taxonkit_path=envs.TAXONKIT_PATH,
+        db_type="fungi",
+        acc2taxid_dir=envs.ACC2TAXID_DIR,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+
+        threads=args.threads,
         RPM_threshold=args.rpm_f,
-        threads=args.threads
-    )
-    
-    # 验证真菌分析输出
-    check_file_exists(fungal_report, "Fungal analysis output")
+        cmd=args.cmd,
 
-def run_generate_report(args, force=True):
-    file_header = os.path.basename(args.output_dir)
-    kraken2_report=os.path.join(args.output_dir, "Kraken2_results", f"{file_header}.norRNA.kraken2ntmicrodb.report_official")
-    viral_report_path = os.path.join(args.output_dir, "Viruses_results", f"{file_header}.viruses.report")
-    bacterial_report_path= os.path.join(args.output_dir, "Bacteria_results", f"{file_header}.bacteria.report")
-    fungal_report_path = os.path.join(args.output_dir, "Fungi_results", f"{file_header}.fungi.report")
-    out_dir = os.path.join(args.output_dir, f"{file_header}.RTTAP.report")
-    
-    paths = {
-        "Viruses report": viral_report_path,
-        "Bacteria report": bacterial_report_path,
-        "Fungi report": fungal_report_path,
-    }
-    
-    functions.generateBowtie2Report(
-        fileHeader=file_header, 
-        bowtie2FungiResultsPath=os.path.join(args.output_dir,"Fungi_results"),
-        bowtie2VirusesResultsPath=os.path.join(args.output_dir,"Viruses_results"),
-        kraken2_report=kraken2_report, RPM_threshold=args.rpm_v,
-        type="viruses"
+        force=args.force
     )
-    functions.generateMetaphlan4Report(
-        fileHeader=file_header,
-        metaphlan4ResultsPath=os.path.join(args.output_dir, "Bacteria_results"),
-        kraken2_report=kraken2_report, RPM_threshold=args.rpm_b
+    wf2.run()
+
+def run_arg(args, configs):
+    wf = workflows.ARGIdentification(
+        input_fq=configs.bac_fq,
+        out_dir=configs.ARG_dir,
+        fileHeader=configs.fileHeader,
+
+        tool_path=envs.RGI_PATH,
+        db_path=envs.CARD_DB_PATH,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RGI_ENV_NAME,
+
+        threads=args.threads,
+        cmd=args.cmd,
+
+        force=args.force
     )
-    functions.generateBowtie2Report(
-        fileHeader=file_header, 
-        bowtie2FungiResultsPath=os.path.join(args.output_dir,"Fungi_results"),
-        bowtie2VirusesResultsPath=os.path.join(args.output_dir,"Viruses_results"),
-        kraken2_report=kraken2_report, RPM_threshold=args.rpm_f,
-        type="fungi"
+    wf.run()
+
+def run_virstrain(args, configs):
+    wf = workflows.VirusStrainProfiling(
+        input_fq_gz=configs.vir_fq,
+        out_dir=configs.virus_strain_dir,
+        fileHeader=configs.fileHeader,
+
+        virus_report_path=configs.vir_report,
+        tool_path=envs.VIRSTRAIN_PATH,
+        db_path=envs.VIRSTRAIN_DB_PATH,
+        virstrain_list_path=envs.VIRSTRAIN_DB_LIST,
+        conda_dir=envs.CONDA_PATH,
+        env_name=envs.RTTAP_ENV_NAME,
+
+        threads=args.threads,
+        cmd=args.cmd,
+
+        force=args.force
     )
-    flag = True
-    for key in paths.keys():
-        if os.path.isfile(paths[key]):
-            continue
-        else:
-            logging.error(f"{key} of {file_header} does not exist, failed to generate overall report.")
-            flag = False
-    if flag==True:
-        functions.generateOveralReport(file_header, viral_report_path, bacterial_report_path, fungal_report_path, out_dir)
-        logging.info(f"Generated overall report to {out_dir}")
+    wf.run()
+
+def run_report(args, configs):
+    wf = workflows.GenerateReport(
+        out_dir=configs.sample_dir,
         
-    return
-    
-def run_end_to_end(args):
-    file_header = os.path.basename(args.output_dir)
-    viral_report_path = os.path.join(args.output_dir, "Viruses_results", f"{file_header}.viruses.report")
-    bacterial_report_path= os.path.join(args.output_dir, "Bacteria_results", f"{file_header}.bacteria.report")
-    fungal_report_path = os.path.join(args.output_dir, "Fungi_results", f"{file_header}.fungi.report")
-    out_dir = os.path.join(args.output_dir, f"{file_header}.RTTAP.report")
-    logging.info(f"RTTAP end-to-end analysis on {file_header} started.")
-    paths = {
-        "Viruses report": viral_report_path,
-        "Bacteria report": bacterial_report_path,
-        "Fungi report": fungal_report_path,
-    }
-    # print(f"INFO: RTTAP end-to-end analysis on {file_header} started.")
-    
-    # 按顺序运行所有步骤，每个步骤会自动检查是否已完成
-    run_qc(args)
-    run_rrna_removal(args)
-    run_kraken2(args)
-    
-    # 并行运行分析步骤
-    import multiprocessing
-    processes = []
-    
-    if args.rpm_b >= 0:
-        p1 = multiprocessing.Process(target=run_bacterial_analysis, args=(args,))
-        processes.append(p1)
-    
-    if args.rpm_v >= 0:
-        p2 = multiprocessing.Process(target=run_viral_analysis, args=(args,))
-        processes.append(p2)
-    
-    if args.rpm_f >= 0:
-        p3 = multiprocessing.Process(target=run_fungal_analysis, args=(args,))
-        processes.append(p3)
-    
+        k2_report_path=configs.k2_report,
+        mpa_report_path=configs.mpa_report,
+        vir_lca_out_path=configs.vir_lca_out,
+        fun_lca_out_path=configs.fun_lca_out,
+        bac_report_path=configs.bac_report,
+        fun_report_path=configs.fun_report,
+        vir_report_path=configs.vir_report,
+        overall_report_path=configs.overall_report,
+        bac_rpm=args.rpm_b,
+        vir_rpm=args.rpm_v,
+        fun_rpm=args.rpm_f,
+        bac=args.bac,
+        vir=args.vir,
+        fun=args.fun,
+        overall=args.overall,
+        all=args.all,
+
+        force=args.force,
+        threads=args.threads,
+    )
+    wf.run()
+
+def run_end_to_end(args, configs):
+    run_qc(args, configs)
+    run_remove_host(args, configs)
+    run_recruit_reads(args, configs)
+
+    tasks = [run_bacteria, run_viruses, run_fungi]
+    processes = [mp.Process(target=task, args=(args, configs)) for task in tasks]
     for p in processes:
         p.start()
-    
     for p in processes:
         p.join()
-    
-    # run_generate_report(args)
-    flag = True
-    for key in paths.keys():
-        if os.path.isfile(paths[key]):
-            continue
+
+    run_report(args, configs)
+
+    if not args.skip_rgi:
+        run_arg(args, configs)
+    if not args.skip_virstrain:
+        run_virstrain(args, configs)
+
+class Configs:
+    def __init__(self, output_dir, input_2=None):
+        self.sample_dir = output_dir
+        self.fileHeader = os.path.basename(output_dir)
+
+        # qc_dir
+        self.qc_dir = os.path.join(output_dir, '0_quality_control')
+        if input_2 is not None:
+            self.clean_fq_1 = os.path.join(self.qc_dir, f'{self.fileHeader}.clean.R1.fq.gz')
+            self.clean_fq_2 = os.path.join(self.qc_dir, f'{self.fileHeader}.clean.R2.fq.gz')
         else:
-            logging.error(f"{key} of {file_header} does not exist, failed to generate overall report.")
-            flag = False
-    if flag==True:
-        functions.generateOveralReport(file_header, viral_report_path, bacterial_report_path, fungal_report_path, out_dir)
-        logging.info(f"Generated overall report to {out_dir}")
-    
-    logging.info(f"RTTAP end-to-end analysis on {file_header} finished.")
-    # print(f"INFO: RTTAP end-to-end analysis on {file_header} finished.")
+            self.clean_fq_1 = os.path.join(self.qc_dir, f'{self.fileHeader}.clean.fq.gz')
+            self.clean_fq_2 = None
+        self.qc_html = os.path.join(self.qc_dir, f'{self.fileHeader}.html')
+        self.qc_json = os.path.join(self.qc_dir, f'{self.fileHeader}.json')
+
+        self.nohost_dir = os.path.join(output_dir, '1_no_host')
+        self.nohost_fq = os.path.join(self.nohost_dir, f'{self.fileHeader}.nohost.fq.gz')
+
+        self.k2_dir = os.path.join(output_dir, '2_kraken2_results')
+        self.k2_out = os.path.join(self.k2_dir, f'{self.fileHeader}.kraken2.out')
+        self.k2_report = os.path.join(self.k2_dir, f'{self.fileHeader}.kraken2.report')
+
+        self.bac_dir = os.path.join(output_dir, '3_1_bacteria_results')
+        self.bac_fq = os.path.join(self.bac_dir, f'{self.fileHeader}.bacteria.fq.gz')
+        self.mpa_bt2_out = os.path.join(self.bac_dir, f'{self.fileHeader}.metaphlan4.bowtie2.out')
+        self.mpa_report = os.path.join(self.bac_dir, f'{self.fileHeader}.metaphlan4.report')
+        self.bac_report = os.path.join(self.bac_dir, f'{self.fileHeader}.bacteria.report')
+
+        self.vir_dir = os.path.join(output_dir, '3_2_viruses_results')
+        self.vir_fq = os.path.join(self.vir_dir, f'{self.fileHeader}.viruses.fq.gz')
+        self.vir_bt2_out = os.path.join(self.vir_dir, f'{self.fileHeader}.viruses.bowtie2.all.out')
+        self.vir_lca_out = os.path.join(self.vir_dir, f'{self.fileHeader}.viruses.LCA.out')
+        self.vir_report = os.path.join(self.vir_dir, f'{self.fileHeader}.viruses.report')
+
+        self.fun_dir = os.path.join(output_dir, '3_3_fungi_results')
+        self.fun_fq = os.path.join(self.fun_dir, f'{self.fileHeader}.fungi.fq.gz')
+        self.fun_bt2_out = os.path.join(self.fun_dir, f'{self.fileHeader}.fungi.bowtie2.all.out')
+        self.fun_lca_out = os.path.join(self.fun_dir, f'{self.fileHeader}.fungi.LCA.out')
+        self.fun_report = os.path.join(self.fun_dir, f'{self.fileHeader}.fungi.report')
+
+        self.overall_report = os.path.join(output_dir, f'{self.fileHeader}.overall.report')
+
+        self.ARG_dir = os.path.join(output_dir, '4_1_ARG_results')
+        self.virus_strain_dir = os.path.join(output_dir, '4_2_virus_strain_results')
 
 
 def main():
@@ -324,7 +379,7 @@ def main():
     )
     
     # Create subparsers for different modules
-    subparsers  = parser.add_subparsers(
+    subparsers = parser.add_subparsers(
         title="Modules",
         dest="modules",
         description="Modules that proceed different functions.", 
@@ -332,92 +387,142 @@ def main():
         required=True
     )
     # Common arguments for all commands
-    base_parser = argparse.ArgumentParser(add_help=False)
-    base_parser.add_argument(
+    # io_parser: -i -I -o -t --cmd -F
+    io_parser = argparse.ArgumentParser(add_help=False)
+    io_parser.add_argument(
         "-i","--input_1",
         required=True,
         help="The first input file (\".fq\", \".fq.gz\")."
     )
-    base_parser.add_argument(
+    io_parser.add_argument(
         "-I","--input_2",
         required=False, default=None,
         help="The second input file (\".fq\", \".fq.gz\"; used for paired-end files)."
     )
-    base_parser.add_argument(
+    io_parser.add_argument(
         "-o","--output_dir",
         required=True,
         help="Output directory for results."
     )
-    base_parser.add_argument(
+    io_parser.add_argument(
         "-t", "--threads",
-        required=False, default=8, type=int,
-        help="Threads used for analysis. Default: 8"
+        required=False, default=1, type=int,
+        help="Threads used for analysis. Default: 1"
     )
-    base_parser.add_argument(
+    io_parser.add_argument(
+        "-F", "--force", default=False, action="store_true",
+        help="Force to rerun the selected module even if the output files already exist. Default: False"
+    )
+    io_parser.add_argument(
+        "--cmd", type=str, default='',
+        help="The string of commands to be added to runnning tools. Default: ''. For example, when runnning kraken2 in remove_host module, '--cmd \"--confidence 0.5\"' will set the minimum confidence to 0.5 for Kraken2 to classify a sequence. This parameter should be used very carefully as it allows great flexibility while introducing a lot of uncertainty for smoothly running the whole pipeline."
+    )
+    # Common parameters for different modules
+    # param_parser_qc: --min_len
+    param_parser_qc = argparse.ArgumentParser(add_help=False)
+    param_parser_qc.add_argument("--min_len", default=15, type=int,help="Minimum length to keep reads after QC. Default: 15")
+    # param_parser_bac: --rpm_b --skip_rgi
+    param_parser_bac = argparse.ArgumentParser(add_help=False)
+    param_parser_bac.add_argument(
         "--rpm_b", default=10, type=int,
         help="The cut-off threshold for bacterial categories. Default: 10"
     )
-    base_parser.add_argument(
-        "--rpm_v", default=1, type=int,
-        help="The cut-off threshold for viral categories. Default: 1"
-    )
-    base_parser.add_argument(
-        "--rpm_f", default=10, type=int,
-        help="The cut-off threshold for fungal categories. Default: 10"
-    )
-    base_parser.add_argument(
+    param_parser_bac.add_argument(
         "--skip_rgi", default=False, action="store_true",
         help="Skip the ARG analysis. Default: False"
     )
-    base_parser.add_argument(
+    # param_parser_vir: --rpm_v --skip_virstrain
+    param_parser_vir = argparse.ArgumentParser(add_help=False)
+    param_parser_vir.add_argument(
+        "--rpm_v", default=1, type=int,
+        help="The cut-off threshold for viral categories. Default: 1"
+    )
+    param_parser_vir.add_argument(
         "--skip_virstrain", default=False, action="store_true",
         help="Skip the viruses strain analysis. Default: False"
     )
-    base_parser.add_argument(
-        "--cmd", type=str, default=None,
-        help="The string of commands to be added to runnning tools. Default: None. For example, when runnning kraken2, '--cmd \"--confidence 0.5\"' will set the minimum confidence to 0.5 for Kraken2 to classify a sequence. This parameter should be used very carefully as it allows great flexibility while introducing a lot of uncertainty for smoothly running the whole pipeline."
+    # param_parser_fun: --rpm_f
+    param_parser_fun = argparse.ArgumentParser(add_help=False)
+    param_parser_fun.add_argument(
+        "--rpm_f", default=10, type=int,
+        help="The cut-off threshold for fungal categories. Default: 10"
     )
-    
+    # param_parser_report: --bac --vir --fun --overall --all
+    param_parser_report = argparse.ArgumentParser(add_help=False)
+    param_parser_report.add_argument('-b', '--bac', default=False, action="store_true", help='Include bacterial report. Default: False')
+    param_parser_report.add_argument('-v', '--vir', default=False, action="store_true", help='Include viral report. Default: False')
+    param_parser_report.add_argument('-f', '--fun', default=False, action="store_true", help='Include fungal report. Default: False')
+    param_parser_report.add_argument('--overall', default=True, action="store_true", help='Include overall report. Default: True')
+    param_parser_report.add_argument('-a', '--all', default=False, action="store_true", help='Include all reports. Default: False')
+
     # QC module
-    qc_parser = subparsers.add_parser('qc', parents=[base_parser], help='Run quality control only')
-    qc_parser.set_defaults(func=run_qc)
-    
-    # rRNA removal module
-    rrna_parser = subparsers.add_parser('rrna_removal', parents=[base_parser], help='Run rRNA removal only')
-    rrna_parser.set_defaults(func=run_rrna_removal)
-    
+    qc_subparser = subparsers.add_parser('qc', parents=[io_parser, param_parser_qc], help='Run quality control only')
+    # host removal module
+    host_subparser = subparsers.add_parser('remove_host', parents=[io_parser], help='Run host removal only')
     # Kraken2 module
-    kraken_parser = subparsers.add_parser('kraken2', parents=[base_parser], help='Run Kraken2 classification only')
-    kraken_parser.set_defaults(func=run_kraken2)
-    
+    kraken_subparser = subparsers.add_parser('recruit_reads', parents=[io_parser], help='Run Kraken2 classification only')
+
     # Bacterial analysis module
-    bacteria_parser = subparsers.add_parser('bacteria', parents=[base_parser], help='Run bacterial analysis only')
-    bacteria_parser.set_defaults(func=run_bacterial_analysis)
-    
+    bacteria_subparser = subparsers.add_parser('bacteria', parents=[io_parser, param_parser_bac], help='Run bacterial analysis only')
     # Viral analysis module
-    viral_parser = subparsers.add_parser('virus', parents=[base_parser], help='Run viral analysis only')
-    viral_parser.set_defaults(func=run_viral_analysis)
-    
+    viral_subparser = subparsers.add_parser('viruses', parents=[io_parser, param_parser_vir], help='Run viral analysis only')
     # Fungal analysis module
-    fungal_parser = subparsers.add_parser('fungi', parents=[base_parser], help='Run fungal analysis only')
-    fungal_parser.set_defaults(func=run_fungal_analysis)
-    
+    fungal_subparser = subparsers.add_parser('fungi', parents=[io_parser, param_parser_fun], help='Run fungal analysis only')
+
+    # ARG analysis module
+    arg_subparser = subparsers.add_parser('ARG', parents=[io_parser], help='Run ARG analysis only')
+    # Virus strain analysis module
+    virstrain_subparser = subparsers.add_parser('virstrain', parents=[io_parser], help='Run virus strain analysis only')
+
     # Overall report module
-    report_parser = subparsers.add_parser('report', parents=[base_parser], help='Generate overall report for viruses, bacteria, and fungi')
-    report_parser.set_defaults(func=run_generate_report)
-    
+    report_subparser = subparsers.add_parser(
+        'report', parents=[io_parser, param_parser_bac, param_parser_vir, param_parser_fun, param_parser_report], 
+        help='Generate report(s) for viruses, bacteria, fungi, overall, or all (specify with -v, -b, -f, --overall, or -a, options respectively). Default: overall.'
+    )
+    # report_subparser.add_argument('-b', '--bac', default=False, action="store_true", help='Include bacterial report. Default: False')
+    # report_subparser.add_argument('-v', '--vir', default=False, action="store_true", help='Include viral report. Default: False')
+    # report_subparser.add_argument('-f', '--fun', default=False, action="store_true", help='Include fungal report. Default: False')
+    # report_subparser.add_argument('--overall', default=True, action="store_true", help='Include overall report. Default: True')
+    # report_subparser.add_argument('-a', '--all', default=False, action="store_true", help='Include all reports. Default: False')
     # End-to-end analysis
-    endtoend_parser = subparsers.add_parser('end_to_end', parents=[base_parser], help='Run complete end-to-end analysis')
-    endtoend_parser.set_defaults(func=run_end_to_end)
+    endtoend_subparser = subparsers.add_parser('end_to_end', parents=[io_parser, param_parser_qc, param_parser_bac, param_parser_vir, param_parser_fun, param_parser_report], help='Run complete end-to-end analysis')
     
     args = parser.parse_args()
-    if not hasattr(args, 'func'):
-        parser.print_help()
-        return
-    # Create output directory if it doesn't exist
+    
+    # relative path to absolute path
+    args.input_1 = os.path.abspath(args.input_1)    # -i
+    if args.input_2 is not None:
+        args.input_2 = os.path.abspath(args.input_2)    # -I
+    args.output_dir = os.path.abspath(args.output_dir)  # -o
+
+    configs = Configs(args.output_dir, args.input_2)
+
+    # Run the selected module
     os.makedirs(args.output_dir, exist_ok=True)
-    # Run the selected function
-    args.func(args)
+    if args.modules == 'qc':
+        run_qc(args, configs)
+    if args.modules == 'remove_host':
+        run_remove_host(args, configs)
+    if args.modules == 'recruit_reads':
+        run_recruit_reads(args, configs)
+
+    if args.modules == 'bacteria':
+        run_bacteria(args, configs)
+    if args.modules == 'viruses':
+        run_viruses(args, configs)
+    if args.modules == 'fungi':
+        run_fungi(args, configs)
+
+    if args.modules == 'ARG':
+        run_arg(args, configs)
+    if args.modules == 'virstrain':
+        run_virstrain(args, configs)
+
+    if args.modules == 'report':
+        run_report(args, configs)
+
+    if args.modules == 'end_to_end':
+        run_end_to_end(args, configs)
 
 if __name__=="__main__":
     main()

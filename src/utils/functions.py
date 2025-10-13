@@ -1,7 +1,10 @@
+# All Chinese characters in the following code need to be translated into English
 import os
-import pandas as pd
+import sys
+import shlex
 import subprocess as sp
 import multiprocessing
+
 import logging
 logging.basicConfig(
     level=logging.DEBUG, 
@@ -9,185 +12,250 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 import time
-import envs
+import glob
 
-def run_fastp(input_1, out_dir, tool_path, fileHeader, threads=8, input_2=None, min_len=15, cmd=None):
+import pandas as pd
+import numpy as np
+import dask.dataframe as dd
+
+from .. import envs
+
+
+def remove_host(input_1, out_dir, tool_path, db_path, fileHeader, threads=1, input_2=None, cmd=None):
     if cmd is None:
         cmd = ''
+    step_name = 'Remove host reads'
     os.makedirs(out_dir, exist_ok=True)
-    tmp_script = os.path.join(out_dir, 'run_fastp_tmp.sh')
-    logging.info("Running Fastp ...")
-    # print("INFO: Running Fastp ...")
-    if input_2 is not None:
-        bash_commands = [
-            f"{tool_path} -i {input_1} -I {input_2} -o {out_dir}/{fileHeader}.clean.R1.fq.gz -O {out_dir}/{fileHeader}.clean.R2.fq.gz --json {out_dir}/{fileHeader}.json --html {out_dir}/{fileHeader}.html --thread {threads} --length_required {min_len} -D {cmd}\n",
-        ]
-    else:
-        bash_commands = [
-            f"{tool_path} -i {input_1} -o {out_dir}/{fileHeader}.clean.fq.gz --json {out_dir}/{fileHeader}.json --html {out_dir}/{fileHeader}.html --thread {threads} --length_required {min_len} -D\n",
-        ]
+    tmp_script_path = os.path.join(out_dir, f"{'_'.join(step_name.lower().split(' ')+['_tmp'])}.sh")
+    logging.info(f"Starting {step_name.lower()} ...")
 
-    with open(tmp_script, 'w') as f:
-        f.writelines("#!/bin/bash\n")
-        f.writelines(bash_commands)
-    os.system(f"chmod +x {tmp_script}")
-    start_time = time.time()
-    os.system(f"{tmp_script}")
-    elapsed_time = time.time() - start_time
-    logging.info(f"Fastp finished in {elapsed_time:.2f} seconds. Output to {out_dir}")
-    os.remove(tmp_script)
-
-def remove_rRNA(input_1, out_dir, tool_path, db_path, fileHeader, threads=8, input_2=None, cmd=None):
-    if cmd is None:
-        cmd = ''
-    os.makedirs(out_dir, exist_ok=True)
-    logging.info("Removing human rRNA reads ...")
-    # print("INFO: Removing human rRNA reads ...")
+    scripts = []
+    # bash header
+    scripts.append("#!/bin/bash\n")
+    # activate conda environment
+    scripts.append(f"source {os.path.join(envs.CONDA_PATH, 'bin', 'activate')} {envs.RTTAP_ENV_NAME}\n")
+    # execute bowtie2
     if input_2 is not None:
-        logging.info(f"Input:\t{input_1}\n\t\t{input_2}")
-        un_conc_path = os.path.join(out_dir, f"{fileHeader}.norRNA.fq")
-        bt2_out_path = os.path.join(out_dir, f"{fileHeader}.norRNA.bowtie2.out")
-        bash_commands = [
-            f"{tool_path} -x {db_path} -1 {input_1} -2 {input_2} --un-conc {un_conc_path} -S {bt2_out_path} --very-sensitive-local --no-unal -I 1 -p {threads} {cmd}\n",
-            f"mv {os.path.join(out_dir, f'{fileHeader}.norRNA.1.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R1.fq')}\n",
-            f"mv {os.path.join(out_dir, f'{fileHeader}.norRNA.2.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R2.fq')}\n",
-            f"cat {os.path.join(out_dir, f'{fileHeader}.norRNA.R1.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R2.fq')} | sed 's/ /_/g' | gzip -f -c -1 > {os.path.join(out_dir, f'{fileHeader}.norRNA.fq.gz')}\n",
-            f"rm {os.path.join(out_dir, f'{fileHeader}.norRNA.R1.fq')} {os.path.join(out_dir, f'{fileHeader}.norRNA.R2.fq')}\n",
+        un_conc_path = os.path.join(out_dir, f"{fileHeader}.nohost.fq")
+        bt2_out_path = os.path.join(out_dir, f"{fileHeader}.nohost.bowtie2.out")
+        scripts.append(f"{tool_path} -x {db_path} -1 {input_1} -2 {input_2} --un-conc {un_conc_path} -S {bt2_out_path} --very-sensitive-local --no-unal -I 1 -p {threads} {cmd}\n")
+        scripts.extend([
+            f"mv {os.path.join(out_dir, f'{fileHeader}.nohost.1.fq')} {os.path.join(out_dir, f'{fileHeader}.nohost.R1.fq')}\n",
+            f"mv {os.path.join(out_dir, f'{fileHeader}.nohost.2.fq')} {os.path.join(out_dir, f'{fileHeader}.nohost.R2.fq')}\n",
+            f"cat {os.path.join(out_dir, f'{fileHeader}.nohost.R1.fq')} {os.path.join(out_dir, f'{fileHeader}.nohost.R2.fq')} | sed 's/ /_/g' | gzip -f -c -1 > {os.path.join(out_dir, f'{fileHeader}.nohost.fq.gz')}\n",
+            f"rm {os.path.join(out_dir, f'{fileHeader}.nohost.R1.fq')} {os.path.join(out_dir, f'{fileHeader}.nohost.R2.fq')}\n",
             f"rm {bt2_out_path}\n",
-        ]
+        ])
     else:
-        logging.info(f"Input:\t{input_1}")
-        bash_commands = [
-            f"{tool_path} -x {db_path} -U {input_1} --un {os.path.join(out_dir, f'{fileHeader}.norRNA.fq')} -S {os.path.join(out_dir, f'{fileHeader}.norRNA.bowtie2.out')} --very-sensitive-local --no-unal -I 1 -p {threads} {'' if cmd is None else cmd}\n",
-            f"cat {os.path.join(out_dir, f'{fileHeader}.norRNA.fq')} | sed 's/ /_/g' | gzip -f -c -1 > {os.path.join(out_dir, f'{fileHeader}.norRNA.fq.gz')}\n",
-            f"rm {os.path.join(out_dir, f'{fileHeader}.norRNA.fq')}\n",
-            f"rm {os.path.join(out_dir, f'{fileHeader}.norRNA.bowtie2.out')}\n",
-        ]
-    with open(f"{out_dir}/remove_rRNA_tmp.sh", 'w') as f:
-        f.writelines("#!/bin/bash\n")
-        f.writelines(bash_commands)
-    os.system(f"chmod +x {out_dir}/remove_rRNA_tmp.sh")
-    start_time = time.time()
-    os.system(f"{out_dir}/remove_rRNA_tmp.sh")
-    elapsed_time = time.time() - start_time
-    logging.info(f"Removing human rRNA reads finished in {elapsed_time:.2f} seconds. Output to {out_dir}")
-    os.remove(f"{out_dir}/remove_rRNA_tmp.sh")
+        nohost_path = os.path.join(out_dir, f"{fileHeader}.nohost.fq")
+        nohost_gz_path = os.path.join(out_dir, f"{fileHeader}.nohost.fq.gz")
+        bt2_out_path = os.path.join(out_dir, f"{fileHeader}.nohost.bowtie2.out")
+        scripts.append(f"{tool_path} -x {db_path} -U {input_1} --un {nohost_path} -S {bt2_out_path} --very-sensitive-local --no-unal -I 1 -p {threads} {cmd}\n")
+        scripts.extend([
+            f"cat {nohost_path} | sed 's/ /_/g' | gzip -f -c -1 > {nohost_gz_path}\n",
+            f"rm {nohost_path}\n",
+            f"rm {bt2_out_path}\n",
+        ])
 
-def run_Kraken2(input, out_dir, fileHeader, tool_path, db_path, threads=8, cmd=None):
+    # write, run, and timing the script
+    with open(tmp_script_path, 'w') as f:
+        f.writelines(scripts)
+    os.system(f"chmod +x {tmp_script_path}")
+    start_time = time.time()
+    os.system(tmp_script_path)
+    elapsed_time = time.time() - start_time
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds. Output to {out_dir}/")
+    os.remove(tmp_script_path)
+
+def run_fastp(input_1, out_dir, tool_path, fileHeader, threads=1, input_2=None, min_len=15, cmd=None):
     if cmd is None:
         cmd = ''
+    step_name = 'Quality control'
     os.makedirs(out_dir, exist_ok=True)
-    logging.info("Running Kraken2 ...")
-    kraken_out = os.path.join(out_dir, f"{fileHeader}.norRNA.kraken2ntmicrodb.out")
-    kraken_report = os.path.join(out_dir, f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official")
-    bash_commands = [
-        f"time {tool_path} --db {db_path} --threads {threads} --output {kraken_out} {input} --report {kraken_report} --gzip-compressed {cmd}\n",
-        f"echo 'INFO: Kraken2 finished.'\n"
-    ]
-    with open(f"{out_dir}/run_Kraken2_tmp.sh", 'w') as f:
-        f.writelines("#!/bin/bash\n")
-        f.writelines(bash_commands)
-    os.system(f"chmod +x {out_dir}/run_Kraken2_tmp.sh")
+    tmp_script_path = os.path.join(out_dir, f"{'_'.join(step_name.lower().split(' ')+['_tmp'])}.sh")
+    logging.info(f"Starting {step_name.lower()} ...")
+
+    scripts = []
+    # bash header 
+    scripts.append("#!/bin/bash\n")
+    # activate conda environment
+    scripts.append(f"source {os.path.join(envs.CONDA_PATH, 'bin', 'activate')} {envs.RTTAP_ENV_NAME}\n")
+    # execute fastp
+    if input_2 is not None:
+        scripts.append(f"{tool_path} -i {input_1} -I {input_2} -o {out_dir}/{fileHeader}.clean.R1.fq.gz -O {out_dir}/{fileHeader}.clean.R2.fq.gz --json {out_dir}/{fileHeader}.json --html {out_dir}/{fileHeader}.html --thread {threads} --length_required {min_len} -D {cmd}\n")
+    else:
+        scripts.append(f"{tool_path} -i {input_1} -o {out_dir}/{fileHeader}.clean.fq.gz --json {out_dir}/{fileHeader}.json --html {out_dir}/{fileHeader}.html --thread {threads} --length_required {min_len} -D\n")
+
+    # write, run, and timing the script
+    with open(tmp_script_path, 'w') as f:
+        f.writelines(scripts)
+    os.system(f"chmod +x {tmp_script_path}")
     start_time = time.time()
-    os.system(f"{out_dir}/run_Kraken2_tmp.sh")
+    os.system(tmp_script_path)
     elapsed_time = time.time() - start_time
-    logging.info(f"Kraken2 finished in {elapsed_time:.2f} seconds. Output to {out_dir}")
-    os.remove(f"{out_dir}/run_Kraken2_tmp.sh")
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds. Output to {out_dir}/")
+    os.remove(tmp_script_path)
 
 def split_reads(kraken_out, kraken_report, fq_gz, out_dir, fileHeader, reads_type, script_path="./extract_kraken_reads_nostdout.py"):
-    os.makedirs(out_dir, exist_ok=True)
-    logging.info(f"Splitting {reads_type} reads...")
-    fq_bac = os.path.join(out_dir, f"{fileHeader}.bacteria.fq")
-    fq_vir = os.path.join(out_dir, f"{fileHeader}.viruses.fq")
-    fq_fun = os.path.join(out_dir, f"{fileHeader}.fungi.fq")
-    if reads_type=="bacteria":
-        bash_commands = [
-            f"python {script_path} -k {kraken_out} -s {fq_gz} -r {kraken_report} -t 2 -o {fq_bac} --include-children --fastq-output\n",
-            f"gzip --fast {fq_bac} -f\n",
-            # f"echo 'INFO: Splitting {reads_type} reads finished.'\n"
-        ]
-    if reads_type=="viruses":
-        bash_commands = [
-            f"python {script_path} -k {kraken_out} -s {fq_gz} -r {kraken_report} -t 10239 -o {fq_vir} --include-children --fastq-output\n",
-            f"gzip --fast {fq_vir} -f\n",
-            # f"echo 'INFO: Splitting {reads_type} reads finished.'\n"
-        ]
-    if reads_type=="fungi":
-        bash_commands = [
-            f"python {script_path} -k {kraken_out} -s {fq_gz} -r {kraken_report} -t 4751 -o {fq_fun} --include-children --fastq-output\n",
-            f"gzip --fast {fq_fun} -f\n",
-            # f"echo 'INFO: Splitting {reads_type} reads finished.'\n"
-        ]
+    taxid_dict = {
+        "bacteria": 2,
+        "viruses": 10239,
+        "fungi": 4751
+    }
+    if reads_type.lower() not in taxid_dict.keys():
+        raise ValueError(f"Invalid reads_type: {reads_type}. Must be one of {list(taxid_dict.keys())}.")
+    taxid = taxid_dict.get(reads_type.lower())
 
-    tmp_script = os.path.join(out_dir, f"split_reads_{reads_type}_tmp.sh")
-    with open(tmp_script, 'w') as f:
-        f.writelines("#!/bin/bash\n")
-        f.writelines(bash_commands)
-    os.system(f"chmod +x {tmp_script}")
+    step_name = f"Split {reads_type.lower()} reads"
+    os.makedirs(out_dir, exist_ok=True)
+    fq = os.path.join(out_dir, f"{fileHeader}.{reads_type}.fq")
+    tmp_script_path = os.path.join(out_dir, f"{'_'.join(step_name.lower().split(' ')+['_tmp'])}.sh")
+
+    logging.info(f"Starting {step_name} ...")
+    scripts = []
+    # bash header
+    scripts.append("#!/bin/bash\n")
+    # activate conda environment
+    scripts.append(f"source {os.path.join(envs.CONDA_PATH, 'bin', 'activate')} {envs.RTTAP_ENV_NAME}\n")
+    # execute python script
+    scripts.append(f"python {script_path} -k {kraken_out} -s {fq_gz} -r {kraken_report} -t {taxid} -o {fq} --include-children --fastq-output\n")
+    scripts.append(f"gzip --fast {fq} -f\n")
+
+    # write, run, and timing the script
+    with open(tmp_script_path, 'w') as f:
+        f.writelines(scripts)
+    os.system(f"chmod +x {tmp_script_path}")
     start_time = time.time()
-    os.system(tmp_script)
+    os.system(tmp_script_path)
     elapsed_time = time.time() - start_time
-    logging.info(f"Splitting {reads_type} reads finished in {elapsed_time:.2f} seconds. Output to {out_dir}")
-    os.remove(tmp_script)
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds. Output to {out_dir}/")
+    os.remove(tmp_script_path)
+    return
 
-def run_Metaphlan4(input, out_dir, tool_path, fileHeader, metaphlan4_db_path, threads=8):
-    os.makedirs(out_dir, exist_ok=True)
-    mpa_bt_out = os.path.join(out_dir, f"{fileHeader}.metaphlan4.bowtie2.out")
-    mpa_out = os.path.join(out_dir, f"{fileHeader}.metaphlan4.out")
-    tmp_script = os.path.join(out_dir, 'run_Metaphlan4_tmp.sh')
-    logging.info("Running MetaPhlAn4 ...")
+
+def run_bowtie2(input, out_dir, bt_path, taxonkit_path, fileHeader, db_type, acc2taxid_dir, threads=1):
+    db_path_dict = {
+        "viruses": envs.BT_VIRAL_DB_PATH,
+        "fungi": envs.BT_FUNGAL_DB_PATH
+    }
+    acc2taxid_dict = {
+        "viruses": f"{acc2taxid_dir}/viruses.acc2taxid.txt",
+        "fungi": f"{acc2taxid_dir}/EuPathDB46.seq2taxid.txt",
+    }
+    if db_type not in db_path_dict.keys():
+        raise ValueError(f"Invalid db_type: {db_type}. Must be one of {list(db_path_dict.keys())}.")
     
-    if os.path.exists(mpa_bt_out):
-        os.remove(mpa_bt_out)
-    bash_commands = [
-        f"source {os.path.join(envs.CONDA_PATH, 'bin', 'activate')} {envs.RTTAP_ENV_NAME}\n",
-        f"{tool_path} {input} --bowtie2db {os.path.dirname(metaphlan4_db_path)} -x {os.path.basename(metaphlan4_db_path)} -t rel_ab_w_read_stats -o {mpa_out} --nproc {threads} --input_type fastq --CAMI_format_output --bowtie2out {mpa_bt_out} --unclassified_estimation\n",
+    step_name = f"Bowtie2 mapping for {db_type}"
+    os.makedirs(out_dir, exist_ok=True)
+    db_path = db_path_dict.get(db_type)
+    acc2taxid_path = acc2taxid_dict.get(db_type)
+
+    logging.info(f"Starting {step_name.lower()} ...")
+    # Step 1-2: run bowtie2 and extract uniq and multi mapping readID-accID records using awk
+    scripts = []
+    # bash header
+    scripts.append("#!/bin/bash\n")
+    # activate conda environment
+    scripts.append(f"source {os.path.join(envs.CONDA_PATH, 'bin', 'activate')} {envs.RTTAP_ENV_NAME}\n")
+    # execute bowtie2
+    scripts.append(f"{bt_path} -x {db_path} -U {input}  --xeq -S {out_dir}/{fileHeader}.{db_type}.bowtie2.all.out -a -p {threads} --no-unal --no-head\n")
+    # extract uniq and multi mapping reads
+    scripts.append(
+        f"awk '{{if ($0 ~ /AS:/ && $0 !~ /XS:/) print $1 \"\\t\" $3 > \"{out_dir}/{fileHeader}.{db_type}.uniq.tmp\"; "
+        f"else if ($0 ~ /AS:/ && $0 ~ /XS:/) print $1 \"\\t\" $3 > \"{out_dir}/{fileHeader}.{db_type}.multi.tmp\"}}' "
+        f"{out_dir}/{fileHeader}.{db_type}.bowtie2.all.out\n"
+    )
+    # write, run, and timing the script
+    tmp_script_path = os.path.join(out_dir, f'run_Bowtie2_{db_type}_tmp.sh')
+    with open(tmp_script_path, 'w') as f:
+        f.writelines(scripts)
+    os.system(f"chmod +x {tmp_script_path}")
+    start_time = time.time()
+    os.system(tmp_script_path)
+    elapsed_time = time.time() - start_time
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds. Output to {out_dir}/")
+    os.remove(tmp_script_path)
+
+    # Step 3: append taxid to uniq and multi mapping results
+    acc2taxid_dict = {
+        "viruses": f"{acc2taxid_dir}/viruses.acc2taxid.txt",
+        "fungi": f"{acc2taxid_dir}/EuPathDB46.seq2taxid.txt",
+    }
+    acc2taxid_path = acc2taxid_dict.get(db_type)
+    uniq_read2acc_path = f"{out_dir}/{fileHeader}.{db_type}.uniq.tmp"
+    multi_read2acc_path = f"{out_dir}/{fileHeader}.{db_type}.multi.tmp"
+    step_name = f"Appending taxid to bowtie2 {db_type} results"
+    # read files
+    logging.info(f"Start {step_name.lower()} ...")
+    start_time = time.time()
+    acc2taxid = pd.read_table(acc2taxid_path, header=None, names=["acc.ver", "taxid"]).astype({"taxid":"str"})
+    uniqread2acc = pd.read_table(f"{out_dir}/{fileHeader}.{db_type}.uniq.tmp", header=None, names=["readId", "acc.ver"])
+    multiread2acc = pd.read_table(f"{out_dir}/{fileHeader}.{db_type}.multi.tmp", header=None, names=["readId", "acc.ver"])
+    # add taxid after acc.ver column
+    uniqacc2taxid = pd.merge(uniqread2acc, acc2taxid, how="left", on="acc.ver")
+    multiacc2taxid = pd.merge(multiread2acc, acc2taxid, how="left", on="acc.ver")
+    # save temporary files
+    uniqacc2taxid.to_csv(f"{out_dir}/{fileHeader}.{db_type}.uniq.reads2acc2taxid.tmp", header=None, index=False, sep='\t')
+    multiacc2taxid.to_csv(f"{out_dir}/{fileHeader}.{db_type}.multi.reads2acc2taxid.tmp", header=None, index=False, sep='\t')
+    elapsed_time = time.time() - start_time
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds.")
+    
+    # Step 4: convert taxid to taxonomic path using taxonkit
+    taxonkit_cmds = [
+        f"cat {out_dir}/{fileHeader}.{db_type}.uniq.reads2acc2taxid.tmp | {taxonkit_path} reformat -I3 -t > {out_dir}/{fileHeader}.{db_type}.uniq.reads2taxid_path.tmp\n",
+        f"cat {out_dir}/{fileHeader}.{db_type}.multi.reads2acc2taxid.tmp | {taxonkit_path} reformat -I3 -t > {out_dir}/{fileHeader}.{db_type}.multi.reads2taxid_path.tmp\n",
     ]
-    with open(tmp_script, 'w') as f:
-        f.writelines("#!/bin/bash\n")
-        f.writelines(bash_commands)
-    os.system(f"chmod +x {tmp_script}")
+    step_name = f"Converting taxid to taxonomic path using taxonkit for {db_type}"
+    logging.info(f"Starting {step_name.lower()} ...")
     start_time = time.time()
-    os.system(tmp_script)
+    for cmd in taxonkit_cmds:
+        sp.run(cmd, shell=True, check=True)
     elapsed_time = time.time() - start_time
-    logging.info(f"MetaPhlAn4 finished in {elapsed_time:.2f} seconds. Output to {out_dir}")
-    os.remove(tmp_script)
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds.")
 
-def append_taxid(bt_results_path, acc2taxid_path, reads_type, fileHeader):
-    if reads_type in ["viruses", "fungi", "archaea"]:
-        resultsPath = bt_results_path
-        if reads_type == "viruses":
-            acc2taxid = pd.read_table(f"{acc2taxid_path}/viruses.acc2taxid.txt", header=None, names=["acc.ver", "taxid"]).astype({"taxid":"str"})
-        if reads_type == "fungi":
-            acc2taxid = pd.read_table(f"{acc2taxid_path}/EuPathDB46.seq2taxid.txt", header=None, names=["acc.ver", "taxid"]).astype({"taxid":"str"})
+    # Step 5: run LCA on bowtie2 results
+    def lineage_lca(lineage):
+        splitted_lineage = lineage.str.split(";")
+        splitted_lineage = splitted_lineage.apply(lambda x: [i for i in x if pd.notnull(i)])
+        arrs = np.array(splitted_lineage.tolist())
+        # 找每列都一致的部分
+        mask = (arrs == arrs[0]).all(axis=0)
+        lca = ";".join(arrs[0][mask])
+        return lca
+    step_name = f"Running LCA on bowtie2 {db_type} results"
+    logging.info(f"Starting {step_name.lower()} ...")
+    start_time = time.time()
+    ddf = dd.read_csv(f"{out_dir}/{fileHeader}.{db_type}.multi.reads2taxid_path.tmp", sep='\t', names=["readId", "refId", "taxid", "namePath", "taxaPath"])
+    result = ddf.groupby("readId").agg({"taxaPath": lambda x: lineage_lca(x)}).compute()
+    result.to_csv(f"{out_dir}/{fileHeader}.{db_type}.multi_reads_path.tmp", header=None, index=None, sep='\t')
+    elapsed_time = time.time() - start_time
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds.")
     
-        uniqread2acc = pd.read_table(f"{resultsPath}/{fileHeader}.{reads_type}.uniq.tmp", header=None, names=["readId", "acc.ver"])
-        multiread2acc = pd.read_table(f"{resultsPath}/{fileHeader}.{reads_type}.multi.tmp", header=None, names=["readId", "acc.ver"])
-        
-        # add taxid after acc.ver column
-        uniqacc2taxid = pd.merge(uniqread2acc, acc2taxid, how="left", on="acc.ver")
-        multiacc2taxid = pd.merge(multiread2acc, acc2taxid, how="left", on="acc.ver")
-        
-        # save temporary file
-        uniqacc2taxid.to_csv(f"{resultsPath}/{fileHeader}.{reads_type}.uniq.reads2acc2taxid.tmp", header=None, index=False, sep='\t')
-        multiacc2taxid.to_csv(f"{resultsPath}/{fileHeader}.{reads_type}.multi.reads2acc2taxid.tmp", header=None, index=False, sep='\t')
+    # Step 6: merge uniq and multi mapping results, clean up temporary files
+    step_name = f"Merging results"
+    logging.info(f"Starting {step_name.lower()} ...")
+    start_time = time.time()
+    uniq_results = pd.read_csv(f"{out_dir}/{fileHeader}.{db_type}.uniq.reads2taxid_path.tmp", sep='\t', header=None)
+    multi_results = pd.read_csv(f"{out_dir}/{fileHeader}.{db_type}.multi.reads2taxid_path.tmp", sep='\t', header=None)
+    merged_results = pd.concat([uniq_results, multi_results]).drop_duplicates()
+    merged_results.to_csv(f"{out_dir}/{fileHeader}.{db_type}.LCA.out", header=None, index=None, sep='\t')
+    elapsed_time = time.time() - start_time
+    logging.info(f"{step_name.capitalize()} finished in {elapsed_time:.2f} seconds.")
+    # clean up temporary files
+    temp_files = [
+        f"{out_dir}/{fileHeader}.{db_type}.uniq.tmp",
+        f"{out_dir}/{fileHeader}.{db_type}.multi.tmp",
+        f"{out_dir}/{fileHeader}.{db_type}.uniq.reads2acc2taxid.tmp",
+        f"{out_dir}/{fileHeader}.{db_type}.multi.reads2acc2taxid.tmp",
+        f"{out_dir}/{fileHeader}.{db_type}.uniq.reads2taxid_path.tmp",
+        f"{out_dir}/{fileHeader}.{db_type}.multi.reads2taxid_path.tmp",
+    ]
+    for temp_file in temp_files:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
-def taxa_path_LCA(resultsPath, fileHeader, reads_type):
-    def readLCA(path):
-        splittedPath = path.str.split(";", expand=True)
-        values = splittedPath.iloc[0, :][splittedPath.apply(pd.Series.nunique) == 1].tolist()
-        # change into string and filter out NaN
-        values = [str(v) for v in values if pd.notnull(v)]
-        return ";".join(values)
+    return
 
-    if reads_type in ["viruses", "fungi", "archaea"]:
-        read2taxaPath = pd.read_csv(f"{resultsPath}/{fileHeader}.{reads_type}.multi.reads2taxid_path.tmp", header=None, names=["readId", "refId", "taxid", "namePath", "taxaPath"], sep='\t')
-        reads_new = read2taxaPath.groupby("readId").agg({"namePath": readLCA, "taxaPath": readLCA}).reset_index()
-        reads_new.to_csv(f"{resultsPath}/{fileHeader}.{reads_type}.multi_reads_path.tmp", header=None, index=None, sep='\t')
-
-def run_Bowtie2(input, out_dir, bt_path, taxonkit_path, db_path, fileHeader, db_type, acc2taxid_path, threads=8):
-    os.makedirs(out_dir, exist_ok=True)
-    
     if db_type=="viruses":
         logging.info("Running Bowtie2 on viral reads ...")
         # print("INFO: Run Bowtie2 on viral reads ...")
@@ -335,11 +403,11 @@ def generateBowtie2Report(fileHeader, bowtie2VirusesResultsPath, bowtie2FungiRes
         })
     else:
         for idx, rank in enumerate(ranks):
-            
-            tmp["taxa"] = out["taxaPath"].str.split(";", expand=True)[idx].replace("","No Name")
-            tmp["taxaID"] = out["taxaIDPath"].str.split(";", expand=True)[idx].replace("","No ID")
-            tmp["rank"] = ranks[idx]
-            tmp["reads"] = 1
+            if idx <= out["taxaPath"].str.split(";", expand=True).shape[1]:
+                tmp["taxa"] = out["taxaPath"].str.split(";", expand=True)[idx].replace("","No Name")
+                tmp["taxaID"] = out["taxaIDPath"].str.split(";", expand=True)[idx].replace("","No ID")
+                tmp["rank"] = ranks[idx]
+                tmp["reads"] = 1
             
             report_tmp = pd.concat([report_tmp, tmp], axis=0).reset_index(drop=True)
 
@@ -369,39 +437,52 @@ def generateMetaphlan4Report(fileHeader, metaphlan4ResultsPath, kraken2_report, 
     total_reads_count = k2_report[k2_report["taxa"].isin(["root","unclassified"])]["reads"].sum(axis=0)
     
     # remove unclassified
-    out = out.iloc[1:,:].reset_index(drop=True)
-    # pre-process
-    out["taxaPath"] = out["taxaPath"].str.replace("|", ";", case=True, regex=False)
-    out["taxaIDPath"] = out["taxaIDPath"].str.replace("|", ";", case=True, regex=False)
+    if out.shape[0]==0 or out.shape[0]==1:
+        report = pd.DataFrame({
+            "rank":[],
+            "taxa":[],
+            "taxaID":[],
+            "reads":[],
+            "RPM":[]
+        })
+        logging.warning("No bacteria found in MetaPhlAn4 results.")
+        report.to_csv("{}/{}.bacteria.report".format(metaphlan4ResultsPath, fileHeader), sep='\t', index=None)
+        return
+    else:
+        out = out.iloc[1:,:].reset_index(drop=True)
+        # pre-process
+        out["taxaPath"] = out["taxaPath"].str.replace("|", ";", case=True, regex=False)
+        out["taxaIDPath"] = out["taxaIDPath"].str.replace("|", ";", case=True, regex=False)
 
-    report = pd.DataFrame({})
-    report_tmp = pd.DataFrame({})
-    
-    taxaPath_tmp = out["taxaPath"].str.split(";", expand=True)
-    taxaIDPath_tmp = out["taxaIDPath"].str.split(";", expand=True)
-    taxa = []
-    taxaID = []
-    for idx in range(out.shape[0]):
-        taxa.append(taxaPath_tmp.iloc[idx,:][taxaPath_tmp.iloc[idx,:].T.last_valid_index()])
-        taxaID.append(taxaIDPath_tmp.iloc[idx,:][taxaIDPath_tmp.iloc[idx,:].T.last_valid_index()])
-    report_tmp["taxa"] = pd.Series(taxa).str.split("__", expand=True)[1]
-    report_tmp["taxaID"] = taxaID
-    report_tmp["rank"] = pd.Series(taxa).str.split("__", expand=True)[0]
-    report_tmp["reads"] = out["reads"]
+        report = pd.DataFrame({})
+        report_tmp = pd.DataFrame({})
         
-    ranks = ["SuperKingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "Strain"]
-    for idx, item in enumerate(["k","p","c","o","f","g","s","t"]):
-        report_tmp["rank"] = report_tmp["rank"].replace(item, ranks[idx], regex=False)
-    report_tmp = report_tmp.groupby(["rank", "taxa", "taxaID"]).agg({"reads":"sum"})
+        taxaPath_tmp = out["taxaPath"].str.split(";", expand=True)
+        taxaIDPath_tmp = out["taxaIDPath"].str.split(";", expand=True)
+        taxa = []
+        taxaID = []
+        for idx in range(out.shape[0]):
+            taxa.append(taxaPath_tmp.iloc[idx,:][taxaPath_tmp.iloc[idx,:].T.last_valid_index()])
+            taxaID.append(taxaIDPath_tmp.iloc[idx,:][taxaIDPath_tmp.iloc[idx,:].T.last_valid_index()])
+        report_tmp["taxa"] = pd.Series(taxa).str.split("__", expand=True)[1]
+        report_tmp["taxaID"] = taxaID
+        report_tmp["rank"] = pd.Series(taxa).str.split("__", expand=True)[0]
+        report_tmp["reads"] = out["reads"]
+            
+        ranks = ["SuperKingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "Strain"]
+        for idx, item in enumerate(["k","p","c","o","f","g","s","t"]):
+            report_tmp["rank"] = report_tmp["rank"].replace(item, ranks[idx], regex=False)
+        report_tmp = report_tmp.groupby(["rank", "taxa", "taxaID"]).agg({"reads":"sum"})
 
-    for idx, rank in enumerate(ranks[:7]):
-        report = pd.concat([report, report_tmp[report_tmp.index.get_level_values("rank")==rank].sort_values("reads", ascending=False)], axis=0)
-    
-    report = report.reset_index()
-    report["taxa"] = report["taxa"].str.replace('_', ' ')
-    report["RPM"] = report["reads"]*1000000/total_reads_count
-    report = report[report["RPM"]>=RPM_threshold]
-    report.to_csv("{}/{}.bacteria.report".format(metaphlan4ResultsPath, fileHeader), sep='\t', index=None)
+        for idx, rank in enumerate(ranks[:7]):
+            report = pd.concat([report, report_tmp[report_tmp.index.get_level_values("rank")==rank].sort_values("reads", ascending=False)], axis=0)
+        
+        report = report.reset_index()
+        report["taxa"] = report["taxa"].str.replace('_', ' ')
+        report["RPM"] = report["reads"]*1000000/total_reads_count
+        report = report[report["RPM"]>=RPM_threshold]
+        report.to_csv("{}/{}.bacteria.report".format(metaphlan4ResultsPath, fileHeader), sep='\t', index=None)
+        return
 
 def generateOveralReport(fileHeader, viral_report_path, bacterial_report_path, fungal_report_path, out_path):
 
@@ -489,9 +570,9 @@ def run_VirStrain(viral_fq_gz, viral_report, virstrain_list, out_dir, tool_path,
 def bacterial_stage(out_dir, fileHeader, split_script, mpa_path, rgi_path, CARD_db, metaphlan4_db_path, kraken2_report, RPM_threshold=10, threads=8, skip_rgi=False):
     if not os.path.isfile(os.path.join(out_dir,"splited_reads",f"{fileHeader}.bacteria.fq.gz")):
         split_reads(
-            kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
-            kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
-            fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+            kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.out"), 
+            kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.report_official"), 
+            fq_gz=os.path.join(out_dir,"no_host", f"{fileHeader}.nohost.fq.gz"), 
             out_dir=os.path.join(out_dir,"splited_reads"), 
             fileHeader=fileHeader, reads_type="bacteria", 
             script_path=split_script
@@ -538,29 +619,29 @@ def bacterial_stage(out_dir, fileHeader, split_script, mpa_path, rgi_path, CARD_
             kraken2_report=kraken2_report, RPM_threshold=RPM_threshold
         )
 
-def viral_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, bt_viral_db_path, 
-                virstrain_path, virstrain_db_path, virstrain_db_list, acc2taxid_path,
+def viral_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, #bt_viral_db_path, 
+                virstrain_path, virstrain_db_path, virstrain_db_list, acc2taxid_dir,
                 kraken2_report, RPM_threshold=1, threads=8, skip_virstrain=False):
     if not os.path.isfile(os.path.join(out_dir,"splited_reads",f"{fileHeader}.viruses.fq.gz")):
         split_reads(
-            kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
-            kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
-            fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+            kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.out"), 
+            kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.report_official"), 
+            fq_gz=os.path.join(out_dir,"no_host", f"{fileHeader}.nohost.fq.gz"), 
             out_dir=os.path.join(out_dir,"splited_reads"), 
             fileHeader=fileHeader, reads_type="viruses", 
             script_path=split_script
         )
     
     if not os.path.isfile(os.path.join(out_dir,"Viruses_results",f"{fileHeader}.viruses.LCA.out")):
-        run_Bowtie2(
+        run_bowtie2(
             input=os.path.join(out_dir,"splited_reads", f"{fileHeader}.viruses.fq.gz"),
             out_dir=os.path.join(out_dir,"Viruses_results"),
             bt_path=bt_path,
             taxonkit_path=taxonkit_path,
-            db_path=bt_viral_db_path,
+            # db_path=bt_viral_db_path,
             fileHeader=fileHeader,
             db_type="viruses",
-            acc2taxid_path=acc2taxid_path,
+            acc2taxid_dir=acc2taxid_dir,
             threads=threads
         )
     if not os.path.isfile(os.path.join(out_dir,"Viruses_results", f"{fileHeader}.viruses.report")):
@@ -585,27 +666,27 @@ def viral_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, bt_vi
         
     return
 
-def fungal_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, bt_fungal_db_path, 
-                 acc2taxid_path, kraken2_report, RPM_threshold=10, threads=8):
+def fungal_stage(out_dir, fileHeader, split_script, taxonkit_path, bt_path, #bt_fungal_db_path, 
+                 acc2taxid_dir, kraken2_report, RPM_threshold=10, threads=8):
     if not os.path.isfile(os.path.join(out_dir,"splited_reads",f"{fileHeader}.fungi.fq.gz")):
         split_reads(
-            kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.out"), 
-            kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"), 
-            fq_gz=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+            kraken_out=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.out"), 
+            kraken_report=os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.report_official"), 
+            fq_gz=os.path.join(out_dir,"no_host", f"{fileHeader}.nohost.fq.gz"), 
             out_dir=os.path.join(out_dir,"splited_reads"), 
             fileHeader=fileHeader, reads_type="fungi", 
             script_path=split_script
         )
     if not os.path.isfile(os.path.join(out_dir,"Fungi_results",f"{fileHeader}.fungi.LCA.out")):
-        run_Bowtie2(
+        run_bowtie2(
             input=os.path.join(out_dir,"splited_reads", f"{fileHeader}.fungi.fq.gz"),
             out_dir=os.path.join(out_dir,"Fungi_results"),
             bt_path=bt_path,
             taxonkit_path=taxonkit_path,
-            db_path=bt_fungal_db_path,
+            # db_path=bt_fungal_db_path,
             fileHeader=fileHeader,
             db_type="fungi",
-            acc2taxid_path=acc2taxid_path,
+            acc2taxid_dir=acc2taxid_dir,
             threads=threads
         )
     if not os.path.isfile(os.path.join(out_dir,"Fungi_results",f"{fileHeader}.fungi.report")):
@@ -624,29 +705,58 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
     fileHeader = os.path.basename(out_dir)
     logging.info(f"RTTAP on analysing {fileHeader} started.")
     # print(f"INFO: RTTAP on analysing {fileHeader} started.")
-    
-    fastp_path = env_variables["fastp_path"]
-    bowtie2_path = env_variables["bowtie2_path"]
-    kraken2_path = env_variables["kraken2_path"]
-    mpa_path = env_variables["mpa_path"]
-    rgi_path = env_variables["rgi_path"]
-    virstrain_path = env_variables["virstrain_path"]
-    taxonkit_path = env_variables["taxonkit_path"]
-    
-    split_script = env_variables["split_script"]
-    
-    metaphlan4_db_path = env_variables["metaphlan4_db_path"]
-    CARD_db = env_variables["CARD_db"]
-    bt_viral_db_path = env_variables["bt_viral_db_path"]
-    bt_fungal_db_path = env_variables["bt_fungal_db_path"]
-    virstrain_db_path = env_variables["virstrain_db_path"]
 
-    virstrain_db_list = env_variables["virstrain_db_list"]
-
-    nt_microbial = env_variables["nt_microbial"]
-    ref_human_db = env_variables["ref_human_db"]
-
-    acc2taxid_path = env_variables["acc2taxid_path"]
+    fastp_path = env_variables.get("fastp_path")
+    if not fastp_path:
+        raise ValueError("fastp_path is not set in env_variables.")
+    bowtie2_path = env_variables.get("bowtie2_path")
+    if not bowtie2_path:
+        raise ValueError("bowtie2_path is not set in env_variables.")
+    kraken2_path = env_variables.get("kraken2_path")
+    if not kraken2_path:
+        raise ValueError("kraken2_path is not set in env_variables.")
+    mpa_path = env_variables.get("mpa_path")
+    if not mpa_path:
+        raise ValueError("mpa_path is not set in env_variables.")
+    rgi_path = env_variables.get("rgi_path")
+    if not rgi_path:
+        raise ValueError("rgi_path is not set in env_variables.")
+    virstrain_path = env_variables.get("virstrain_path")
+    if not virstrain_path:
+        raise ValueError("virstrain_path is not set in env_variables.")
+    taxonkit_path = env_variables.get("taxonkit_path")
+    if not taxonkit_path:
+        raise ValueError("taxonkit_path is not set in env_variables.")
+    split_script = env_variables.get("split_script")
+    if not split_script:
+        raise ValueError("split_script is not set in env_variables.")
+    metaphlan4_db_path = env_variables.get("metaphlan4_db_path")
+    if not metaphlan4_db_path:
+        raise ValueError("metaphlan4_db_path is not set in env_variables.")
+    CARD_db = env_variables.get("CARD_db")
+    if not CARD_db:
+        raise ValueError("CARD_db is not set in env_variables.")
+    bt_viral_db_path = env_variables.get("bt_viral_db_path")
+    if not bt_viral_db_path:
+        raise ValueError("bt_viral_db_path is not set in env_variables.")
+    bt_fungal_db_path = env_variables.get("bt_fungal_db_path")
+    if not bt_fungal_db_path:
+        raise ValueError("bt_fungal_db_path is not set in env_variables.")
+    virstrain_db_path = env_variables.get("virstrain_db_path")
+    if not virstrain_db_path:
+        raise ValueError("virstrain_db_path is not set in env_variables.")
+    virstrain_db_list = env_variables.get("virstrain_db_list")
+    if not virstrain_db_list:
+        raise ValueError("virstrain_db_list is not set in env_variables.")
+    nt_microbial = env_variables.get("nt_microbial")
+    if not nt_microbial:
+        raise ValueError("nt_microbial is not set in env_variables.")
+    ref_human_db = env_variables.get("ref_human_db")
+    if not ref_human_db:
+        raise ValueError("ref_human_db is not set in env_variables.")
+    acc2taxid_dir = env_variables.get("acc2taxid_dir")
+    if not acc2taxid_dir:
+        raise ValueError("acc2taxid_dir is not set in env_variables.")
 
     if input_2 is not None:
         run_fastp(
@@ -659,10 +769,10 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
             min_len=15
         )
         
-        remove_rRNA(
+        remove_host(
             input_1=os.path.join(out_dir,"QC",f"{fileHeader}_1.clean.fq.gz"), 
             input_2=os.path.join(out_dir,"QC",f"{fileHeader}_2.clean.fq.gz"), 
-            out_dir=os.path.join(out_dir,"no_rRNA"), 
+            out_dir=os.path.join(out_dir,"no_host"), 
             tool_path=bowtie2_path, 
             db_path=ref_human_db,
             fileHeader=fileHeader, 
@@ -678,15 +788,15 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
             threads=threads,
             min_len=15
         )
-        remove_rRNA(
+        remove_host(
             input_1=os.path.join(out_dir,"QC",f"{fileHeader}.clean.fq.gz"), 
-            out_dir=os.path.join(out_dir,"no_rRNA"), 
+            out_dir=os.path.join(out_dir,"no_host"), 
             tool_path=bowtie2_path, db_path=ref_human_db,
             fileHeader=fileHeader, threads=threads, min_len=15,
         )
 
     run_Kraken2(
-        input=os.path.join(out_dir,"no_rRNA", f"{fileHeader}.norRNA.fq.gz"), 
+        input=os.path.join(out_dir,"no_host", f"{fileHeader}.nohost.fq.gz"), 
         out_dir=os.path.join(out_dir,"Kraken2_results"), 
         fileHeader=fileHeader, tool_path=kraken2_path,
         db_path=nt_microbial, threads=threads
@@ -701,7 +811,7 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
             "rgi_path": rgi_path, 
             "metaphlan4_db_path": metaphlan4_db_path, 
             "CARD_db": CARD_db, 
-            "kraken2_report": os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"),
+            "kraken2_report": os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.report_official"),
             "RPM_threshold": RPM_b,
             "threads": threads
         }
@@ -718,8 +828,8 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
             "virstrain_path": virstrain_path, 
             "virstrain_db_path": virstrain_db_path, 
             "virstrain_db_list": virstrain_db_list, 
-            "acc2taxid_path": acc2taxid_path,
-            "kraken2_report": os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"),
+            "acc2taxid_path": acc2taxid_dir,
+            "kraken2_report": os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.report_official"),
             "RPM_threshold": RPM_v,
             "threads": threads
         }
@@ -733,8 +843,8 @@ def run_pipeline(input_1, out_dir, RPM_b, RPM_v, RPM_f, input_2=None, env_variab
             "taxonkit_path": taxonkit_path, 
             "bt_path": bowtie2_path, 
             "bt_fungal_db_path": bt_fungal_db_path, 
-            "acc2taxid_path": acc2taxid_path,
-            "kraken2_report": os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.norRNA.kraken2ntmicrodb.report_official"),
+            "acc2taxid_path": acc2taxid_dir,
+            "kraken2_report": os.path.join(out_dir,"Kraken2_results", f"{fileHeader}.nohost.kraken2ntmicrodb.report_official"),
             "RPM_threshold": RPM_f,
             "threads": threads
         }

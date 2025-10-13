@@ -1,19 +1,50 @@
-# RTTAP
-The Read-based Total-infectome Taxonomic Analysis Pipeline.  
+# RTTAP - the Read-based Total-infectome Taxonomic Analysis Pipeline.  
+
 RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accurate, and sensitive pipeline focusing analyses of the totoal-infectome of clinical metatranscriptomic data. It includes multiple useful functions to process and analyze raw sequencing reads: quality control, taxonomy profiling, ARG profiling, and virus strain-level profiling thus providing users comprehensive insights about the microbial composition in clinical samples. It is user friendly and easy-to-use, involving minimum human intervention: all its steps could be finished in a single run. 
-# Installation
-1. Clone this respirotry to your local computer:
+
+## Installation
+### 1. Clone this repository to your local computer:
     ```
     git clone https://github.com/weijiang34/RTTAP.git
     ```
-2. Install depoendencies:  
-- create conda environment:  
+### 2. Install depoendencies:  
+Links to the dependencies are listed below:  
+    - Fastp: https://github.com/OpenGene/fastp  
+    - Taxonkit: https://github.com/shenwei356/taxonkit  
+    - SeqKit: https://bioinf.shenwei.me/seqkit/
+    - MetaPhlAn4 (version: 4.0, 4.1): https://github.com/biobakery/MetaPhlAn  
+    - Bowtie2: https://github.com/BenLangmead/bowtie2   
+    - Kraken2: https://github.com/DerrickWood/kraken2  
+    - RGI: https://github.com/arpcard/rgi  
+    - VirStrain: https://github.com/liaoherui/VirStrain  
+
+- Create RTTAP conda environment:  
     ```
-    cd ./RTTAP/
-    conda create -f environment.yml
+    conda create -n RTTAP -c bioconda -c conda-forge -c defaults python==3.10 fastp taxonkit seqkit metaphlan==4.1
     ```
-- Download databases:  
-    Download requeired databases from:
+
+- Clone Kraken2's repository:
+    ```
+    git clone https://github.com/DerrickWood/kraken2.git
+    ```
+
+- Create RGI conda environment:  
+    ```
+    conda create -n rgi -c conda-forge -c bioconda -c defaults rgi
+    ```
+
+- Download VirStrain:  
+    ```
+    # Baidu Netdisk
+    https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg (VirStrain.tar.gz)
+    password: k4tg
+    # or Google drive
+    https://drive.google.com/uc?id=1Wvhm8MwdRv8h9MqLsD2QretiaAzgbhYx
+    ```
+    NOTE: There's a known issue with the newest version of VirStrain. We recommend using the version provided with the above link.
+
+### 3. Download databases:  
+- Download requeired databases from:
     ```
     # Baidu Netdisk
     https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg (RTTAP_DBs.tar.gz)
@@ -21,15 +52,12 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
     # or Google Drive:
     https://drive.google.com/uc?id=1SMx0wD8_z0fn44brOmlDkInM1V6JQxbw 
     ```
-    Unzip them:
+    Run the following commands:
     ```
     tar -zxvf RTTAP_DBs.tar.gz
-    ```
-    and put them under folder: 
-    ```
     mv RTTAP_DBs/* path/to/RTTAP/src/databases/
     ```
-    Databases and dependencies should look like this:
+    The database structure is as following:
     ```
     --./RTTAP/src/databases/
         |--./CARD/
@@ -40,58 +68,37 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
         |--./virstrain_db/
         |--./seq2taxid/
     ```
-- Taxonkit, Fastp, MetaPhlAn4, Bowtie2  
+- Download databases for Taxonkit and MetaPhlAn4:
+  - Taxonkit DB link and database installation instruction: https://bioinf.shenwei.me/taxonkit/download/
     ```
-    conda install -c bioconda fastp 
-    conda install -c bioconda taxonkit 
-    conda install -c bioconda bowtie2 
-    conda install -c bioconda metaphlan==4.0
+    wget -c ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz 
+    tar -zxvf taxdump.tar.gz
+    mkdir -p $HOME/.taxonkit
+    cp names.dmp nodes.dmp delnodes.dmp merged.dmp $HOME/.taxonkit
     ```
-    Detailed instructions for installing them are listed below:  
-    - Taxonkit: https://github.com/shenwei356/taxonkit  
-    - Fastp: https://github.com/OpenGene/fastp  
-    - MetaPhlAn4: https://github.com/biobakery/MetaPhlAn  
-    - Bowtie2: https://github.com/BenLangmead/bowtie2  
-- Kraken2  
-    Download Kraken2 using the following command:
+  - MetaPhlAn4
     ```
-    git clone https://github.com/DerrickWood/kraken2.git
+    conda activate RTTAP
+    metaphlan --install
     ```
-    And please refer to the instructions in *Installation* part: https://github.com/DerrickWood/kraken2/wiki/Manual#installation to install Kraken2
-- RGI  
-    RGI:
-    ```
-    conda install -c conda-forge -c bioconda -c defaults rgi
-    ```
-    GitHub: https://github.com/arpcard/rgi
-- VirStrain  
-    NOTE: There's a known issue with the newest version of VirStrain. We recommend using the version in the following link:
-    ```
-    # Baidu Netdisk
-    https://pan.baidu.com/s/1HYhzCu9KFAacUk5FqwhK6A?pwd=k4tg (VirStrain.tar.gz)
-    password: k4tg
-    # or Google drive
-    https://drive.google.com/uc?id=1_VFczaU2vKWOxwB34CMhUGWOkS6tcSbo
-    ```
-    GiHub: https://github.com/liaoherui/VirStrain
-    
-    
-3. Config your environments
-    Open ```./RTTAP/src/envs.py``` with text editor and set all the required environmental variables according to you computer's environment. Plese only modify the texts between ```### For users modification START``` and ```### For users modification END``` accordingly.
-# Test sample
-Once successfully installed all the dependencies, you can run the following command to have a quick test:
-- Download test sample from https://portland-my.sharepoint.com/:f:/g/personal/wjiang34-c_my_cityu_edu_hk/El6uED6jVfxNtEG21Jc27XoBNRiDw6Z08uNxxPRHJtXhBA?e=qRWWGE  
-Move this test sample to your linux system and run th efollowing command to unzip.
-```
-tar -zxvf test_sample.tar.gz
-cd test_sample/
+### 4. Config your environments  
+Open `./RTTAP/src/envs.py` with text editor and **set all the required environmental variables** according to you computer's environment.
 
-# run RTTAP
-python path/to/RTTAP/src/RTTAP.py end_to_end -i test.fq.gz -o test_output/ -t 8
-```
+Plese only modify the texts between `### For users modification START` and `### For users modification END` accordingly.
+## Test sample
+Once successfully installed all the dependencies, you can run the following command to have a quick test:
+- Download test sample from [test sample](https://portland-my.sharepoint.com/:f:/g/personal/wjiang34-c_my_cityu_edu_hk/El6uED6jVfxNtEG21Jc27XoBNRiDw6Z08uNxxPRHJtXhBA?e=qRWWGE) link.  
+- Move this test sample to your linux system and run the following command:
+    ```
+    tar -zxvf test_sample.tar.gz
+    cd test_sample/
+
+    # run RTTAP
+    python path/to/RTTAP/src/RTTAP.py end_to_end -i test.fq.gz -o test_output/ -t 8
+    ```
 The test sample is a toy dataset which includes simulated reads from several commonly-seen pathegens' genomes. It is a non-paired fastq file, so you will only need to specify one of the input by: ```-i```.
 
-# User guides
+## User guides
 - Overview  
     At any time of using RTTAP, you can use the following command to check each of its parameters and corresponding meaning.
     ```
@@ -151,7 +158,7 @@ The test sample is a toy dataset which includes simulated reads from several com
     ```
     The default valeus is set to ```-t 8```.
 
-# Output interpretation
+## Output interpretation
 RTTAP generates several output files which contains useful information for you to explore and analyze. 
 - Taxonomic profiles:  
     Viral: ```./test_output/Bacteria_results/test_output.bacteria.report```  
@@ -189,5 +196,5 @@ RTTAP generates several output files which contains useful information for you t
     ```
     For detailed interpretation, please refer to https://github.com/liaoherui/VirStrain.
 
-# Contact  
+## Contact  
 - Welcome to email to wjiang34-c@my.cityu.edu.hk or leave your thoughts under *Issues*, if you have any questions to RTTAP, or have any troubles during usage, or you have any suggestions to us.
