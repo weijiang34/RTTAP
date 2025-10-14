@@ -4,9 +4,10 @@ RTTAP (Read-based Total-infectome Taxonomic Analysis Pipeline) is a fast, accura
 
 ## Installation
 ### 1. Clone this repository to your local computer:
-    ```
-    git clone https://github.com/weijiang34/RTTAP.git
-    ```
+```
+git clone https://github.com/weijiang34/RTTAP.git
+```
+
 ### 2. Install depoendencies:  
 Links to the dependencies are listed below:  
     - Fastp: https://github.com/OpenGene/fastp  
@@ -20,7 +21,12 @@ Links to the dependencies are listed below:
 
 - Create RTTAP conda environment:  
     ```
-    conda create -n RTTAP -c bioconda -c conda-forge -c defaults python==3.10 fastp taxonkit seqkit metaphlan==4.1
+    conda create -n RTTAP -c bioconda -c conda-forge -c defaults python==3.10 fastp taxonkit seqkit 
+    ```
+- Install MetaPhlAn4:
+    ```
+    conda activate RTTAP 
+    pip install metaphlan==4.1
     ```
 
 - Clone Kraken2's repository:
