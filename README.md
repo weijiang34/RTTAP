@@ -21,7 +21,7 @@ Links to the dependencies are listed below:
 
 - Create RTTAP conda environment:  
     ```
-    conda create -n RTTAP -c bioconda -c conda-forge -c defaults python==3.10 fastp taxonkit seqkit 
+    conda create -n RTTAP -c bioconda -c conda-forge -c defaults python==3.10 fastp taxonkit seqkit bowtie2
     ```
 - Install MetaPhlAn4:
     ```
